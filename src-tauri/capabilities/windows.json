@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "utility-windows",
+  "description": "Capability for popup, tooltip, add, inspector, alert and menu windows",
+  "windows": ["popup", "tooltip", "add", "inspector", "bg", "alert", "menu"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-position",
+    "core:window:allow-outer-size",
+    "core:window:allow-center",
+    "core:window:allow-start-dragging",
+    "core:window:allow-close",
+    "core:window:allow-set-focus"
+  ]
+}

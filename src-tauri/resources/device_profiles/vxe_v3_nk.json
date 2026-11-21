@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "vxe-v3-nk",
+  "label": "VXE V3 NK / R1 Nearlink 鼠标",
+  "notes": "外置模板：与 profiles.rs 内置定义一致。改这里会覆盖内置，改完重启软件生效。接收器 373B:10C9；17 字节报文应答，resp[6]=电量，resp[7]!=0 为有线/充电。",
+  "known_ids": [
+    {
+      "vid": "373B",
+      "pid": "10C9",
+      "wired_pid": "10C7"
+    }
+  ],
+  "match": {
+    "usage_page": "0xFF02",
+    "usage": null,
+    "require_pid_hit": false
+  },
+  "request": {
+    "transport": "write_read",
+    "payload_hex": "08 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 49",
+    "out_len": null,
+    "in_len": null,
+    "report_id": null
+  },
+  "response": {
+    "min_length": 7,
+    "status": {
+      "offset": 2,
+      "ok_values": [
+        0
+      ]
+    },
+    "level": {
+      "offset": 6,
+      "encoding": "u8",
+      "min": 0,
+      "max": 100,
+      "scale": 1.0,
+      "add": 0
+    },
+    "charging": {
+      "offset": 7,
+      "nonzero": true
+    }
+  },
+  "sampling": {
+    "attempts": 3,
+    "stable_count": 2,
+    "request_timeout_ms": 1200,
+    "total_timeout_s": 4.5,
+    "pick": "mode_nonzero"
+  },
+  "vendor": "VXE",
+  "keywords": "VXE V3 蜻蜓 V3 Dragonfly NK NANO Nearlink 星闪 鼠标"
+}

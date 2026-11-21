@@ -1,0 +1,342 @@
+/*
+ * Whisper Glass · 白玻璃 —— 设计 token（glass-a-full-preview.html 定稿）
+ * 暗色为默认（:root / .theme-dark），浅色走 .theme-light。
+ * 旧 token 名保留为别名，未改的组件自动跟上新配色。
+ */
+
+:root {
+  /* ===== 墨色 / 文字 ===== */
+  --ink: #f4f6f9;
+  --ink-2: #c6ccd7;
+  --ink-3: #adb4c0;
+  --ink-4: #8b93a1;
+  --icon-muted: var(--ink-3);
+  --txt: var(--ink);
+  --muted: var(--ink-3);
+
+  --accent: #4f97ee;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(79, 151, 238, 20%);
+  --focus: #6aa6f5;
+  --focus-shadow: 0 0 0 3px rgba(106, 166, 245, 20%), inset 0 1px 0 rgba(255, 255, 255, 18%);
+  --focus-ring: var(--focus-shadow);
+
+  /* ===== 语义色 ===== */
+  --green: #3cc98a;
+  --green-text: #5bd6a0;
+  --red: #f08a8a;
+  --red-text: #f5a3a3;
+  --amber: #f0b45c;
+  --amber-text: #f5c57e;
+  --batt-good: #3cc98a;
+  --batt-mid: #4f97ee;
+  --batt-low: #f08a8a;
+  --batt-faint: #7c8492;
+  --good: var(--batt-good);
+  --mid: var(--batt-mid);
+  --low: var(--batt-low);
+  --sleep: var(--amber);
+  --ink-good: var(--green-text);
+  --ink-mid: #8db9f5;
+  --ink-low: var(--red-text);
+  --ink-sleep: var(--amber-text);
+
+  /* ===== 六色强调板 ===== */
+  --acc-blue: #6aa6f5;
+  --acc-cyan: #4cc9dd;
+  --acc-violet: #a78bfa;
+  --acc-amber: #f0b45c;
+  --acc-green: #3cc98a;
+  --pal-blue: var(--acc-blue);
+  --pal-red: var(--red);
+  --pal-green: var(--acc-green);
+  --pal-purple: var(--acc-violet);
+  --pal-amber: var(--acc-amber);
+  --pal-cyan: var(--acc-cyan);
+
+  --ring-track: rgba(255, 255, 255, 14%);
+  --bar-track: rgba(255, 255, 255, 14%);
+  --bar-mix: #232833;
+  --track: var(--bar-track);
+  --line: rgba(255, 255, 255, 12%);
+  --gray: #9a9aa2;
+  --faint: var(--batt-faint);
+
+  /* ===== 圆角阶梯 ===== */
+  --r-window: 24px;
+  --r-panel: 20px;
+  --r-card: 16px;
+  --r-row: 16px;
+  --r-tile: 14px;
+  --r-ctrl: 12px;
+  --r-chip: 999px;
+  --r-pop: 14px;
+  --r-pill: 999px;
+  --seg-radius: var(--r-ctrl);
+
+  /* ===== 窗口（壁纸 + 渐变叠层） ===== */
+  --win-bg: linear-gradient(180deg, rgba(28, 32, 42, 78%), rgba(16, 19, 26, 64%));
+  --win-bg-size: auto;
+  --win-bg-position: center;
+  --win-bg-repeat: no-repeat;
+  --win-line: rgba(255, 255, 255, 18%);
+  /* 外层大投影会画进窗口圆角与视口方角的缺口（四角灰影），只留发丝线与内描边 */
+  --win-shadow: 0 0 0 1px rgba(255, 255, 255, 6%),
+    inset 0 1px 0 rgba(255, 255, 255, 14%), inset 0 0 0 1px var(--win-line);
+  --window-stroke: var(--win-line);
+  --main-stroke: var(--win-line);
+  --window-rim: inset 0 0 0 1.5px var(--window-stroke), inset 0 1px 0 rgba(255, 255, 255, 14%);
+
+  --sidebar-bg: linear-gradient(180deg, rgba(255, 255, 255, 6%), rgba(255, 255, 255, 1%));
+  --sidebar-line: inset -1px 0 0 rgba(255, 255, 255, 9%);
+  --veil-bg: linear-gradient(180deg, rgba(255, 255, 255, 7%), rgba(255, 255, 255, 3%));
+  --veil-shadow: inset 0 1px 0 rgba(255, 255, 255, 10%);
+
+  /* ===== 玻璃卡面 ===== */
+  --card-bg: linear-gradient(180deg, rgba(255, 255, 255, 13%), rgba(255, 255, 255, 7%));
+  --card-blur: 10px;
+  --card-sat: 160%;
+  --card-line: rgba(255, 255, 255, 16%);
+  --card-line-hover: rgba(255, 255, 255, 24%);
+  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 14%);
+  --card-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 20%);
+  --lift: -1px;
+
+  --card: rgba(255, 255, 255, 10%);
+  --card-hi: rgba(255, 255, 255, 16%);
+  --card-soft: rgba(255, 255, 255, 7%);
+  --card-top: rgba(255, 255, 255, 13%);
+  --card-bottom: rgba(255, 255, 255, 7%);
+  --surface-stroke: var(--card-line);
+  --surface-stroke-strong: var(--card-line-hover);
+  --surface-hover: var(--card-hi);
+  --surface-highlight: inset 0 1px 0 rgba(255, 255, 255, 14%);
+  --shadow-card: var(--card-shadow);
+  --shadow-raised: var(--card-shadow-hover);
+  --shadow-float: 0 24px 50px rgba(0, 0, 0, 45%);
+
+  /* ===== 实物照片卡片（3.1 新 UI） ===== */
+  --pcard-bg: linear-gradient(180deg, rgba(255, 255, 255, 14%), rgba(255, 255, 255, 8%));
+  --pcard-wm: rgba(255, 255, 255, 13%);
+  --pcard-glow: rgba(120, 160, 220, 20%);
+  --card-img-shadow: drop-shadow(0 10px 12px rgba(0, 0, 0, 38%));
+
+  /* ===== 控件 ===== */
+  --ctrl-bg: linear-gradient(180deg, rgba(255, 255, 255, 16%), rgba(255, 255, 255, 9%));
+  --ctrl-bg-hover: linear-gradient(180deg, rgba(255, 255, 255, 24%), rgba(255, 255, 255, 14%));
+  --ctrl-line: rgba(255, 255, 255, 20%);
+  --ctrl-line-hover: rgba(255, 255, 255, 30%);
+  --ctrl-shadow: inset 0 1px 0 rgba(255, 255, 255, 14%);
+  --ctrl-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 20%);
+  --card-btn: var(--ctrl-bg);
+  --stepper-hover: rgba(255, 255, 255, 12%);
+
+  --cta-bg: linear-gradient(180deg, #ececec, #e2e2e2);
+  --cta-fg: #212121;
+  --cta-line: rgba(255, 255, 255, 20%);
+  --cta-shadow: inset 0 1px 0 rgba(255, 255, 255, 22%);
+  --cta-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 26%);
+
+  --seg-bg: rgba(255, 255, 255, 6%);
+  --seg-line: rgba(255, 255, 255, 10%);
+  --seg-shadow: inset 0 1px 2px rgba(0, 0, 0, 35%);
+  --seg-on-bg: linear-gradient(180deg, rgba(255, 255, 255, 22%), rgba(255, 255, 255, 13%));
+  --seg-on-line: rgba(255, 255, 255, 26%);
+  --seg-on-shadow: 0 2px 6px rgba(0, 0, 0, 28%), inset 0 1px 0 rgba(255, 255, 255, 20%);
+
+  --toggle-track: rgba(255, 255, 255, 14%);
+  --toggle-line: rgba(255, 255, 255, 16%);
+  --toggle-knob: #f4f6f9;
+  --switch-bg: #e8e8e8;
+  --switch-fg: #212121;
+
+  /* ===== 侧栏导航光轨 ===== */
+  --nav-line: rgba(255, 255, 255, 14%);
+  --nav-glow: rgba(79, 151, 238, 16%);
+  --rail-core: color-mix(in srgb, var(--accent) 45%, #fff);
+  --rail-hot: color-mix(in srgb, var(--accent) 50%, #fff);
+  --nav-hover: rgba(255, 255, 255, 7%);
+  --nav-hover-line: rgba(255, 255, 255, 10%);
+  --nav-on-bg: linear-gradient(180deg, rgba(255, 255, 255, 20%), rgba(255, 255, 255, 11%));
+  --nav-on-line: rgba(255, 255, 255, 24%);
+  --nav-on-shadow: 0 6px 16px rgba(0, 0, 0, 26%), inset 0 1px 0 rgba(255, 255, 255, 18%);
+
+  /* ===== 小部件 / 杂项 ===== */
+  --danger-bg: rgba(240, 138, 138, 18%);
+  --danger-line: rgba(240, 138, 138, 30%);
+  --live-bg: rgba(60, 201, 138, 16%);
+  --thumb: rgba(255, 255, 255, 28%);
+  --dot-ring: 0 0 0 3px rgba(20, 24, 32, 92%);
+  --chip-bg-mix: rgba(255, 255, 255, 6%);
+  --chip-text-mix: #f4f6f9;
+  --chip-text-weight: 55%;
+  --brand-shadow: 0 8px 18px rgba(0, 0, 0, 45%);
+  --sel: rgba(79, 151, 238, 30%);
+  --desk-solid: #0c1018;
+  /* 壁纸平移后露出的填充色（深色主题黑） */
+  --wallpaper-fill: #000000;
+  --bg: var(--desk-solid);
+  --bg-lift: var(--desk-solid);
+  /* 下拉/浮层实色底：比 desk 略提亮的冷调，与玻璃卡面视觉协调 */
+  --menu-solid: #18202c;
+
+  /* ===== 动效 ===== */
+  --speed: 180ms;
+  --dur-page: 200ms;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 180ms;
+  --dur-base: 200ms;
+  --dur-enter: 200ms;
+  --dur-exit: 140ms;
+  --dur-page-enter: 200ms;
+  --dur-page-exit: 140ms;
+
+  /* ===== 字体 ===== */
+  --font-body: "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-num: "Segoe UI", "Microsoft YaHei", sans-serif;
+  --fs-title: 30px;
+  --fs-h2: 20px;
+  --fs-label: 18px;
+  --fs-body: 15px;
+  --fs-hint: 13px;
+  --fs-micro: 12px;
+}
+
+.theme-dark {
+  color-scheme: dark;
+}
+
+.theme-light {
+  color-scheme: light;
+
+  /* ===== 墨色 / 文字 ===== */
+  --ink: #16181d;
+  --ink-2: #3c414c;
+  --ink-3: #646a77;
+  --ink-4: #6e7482;
+  --icon-muted: var(--ink-3);
+
+  --accent: #2f80e4;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(47, 128, 228, 14%);
+  --focus: #2f80e4;
+  --focus-shadow: 0 0 0 3px rgba(47, 128, 228, 16%), inset 0 1px 0 rgba(255, 255, 255, 70%);
+
+  /* ===== 语义色 ===== */
+  --green: #22a06b;
+  --green-text: #1a7c55;
+  --red: #d37070;
+  --red-text: #b95454;
+  --amber: #b8863a;
+  --amber-text: #8a5f1c;
+  --batt-good: #22a06b;
+  --batt-mid: #2f80e4;
+  --batt-low: #d37070;
+  --batt-faint: #a5abb6;
+  --ink-good: var(--green-text);
+  --ink-mid: #1b5fae;
+  --ink-low: var(--red-text);
+  --ink-sleep: var(--amber-text);
+
+  /* ===== 六色强调板 ===== */
+  --acc-blue: #2f80e4;
+  --acc-cyan: #1e8fa4;
+  --acc-violet: #7a63c6;
+  --acc-amber: #b0802c;
+  --acc-green: #22a06b;
+
+  --ring-track: rgba(150, 158, 175, 30%);
+  --bar-track: rgba(140, 150, 170, 28%);
+  --bar-mix: #ffffff;
+
+  /* ===== 窗口 ===== */
+  --win-bg: linear-gradient(180deg, rgba(255, 255, 255, 40%), rgba(255, 255, 255, 26%));
+  --win-line: rgba(255, 255, 255, 64%);
+  --win-shadow: 0 0 0 1px rgba(35, 45, 65, 7%),
+    inset 0 1px 0 rgba(255, 255, 255, 72%), inset 0 0 0 1px var(--win-line);
+
+  --sidebar-bg: linear-gradient(180deg, rgba(252, 252, 254, 42%), rgba(252, 252, 254, 10%));
+  --sidebar-line: inset -1px 0 0 rgba(120, 120, 130, 10%);
+  --veil-bg: linear-gradient(180deg, rgba(252, 252, 254, 52%), rgba(252, 252, 254, 34%));
+  --veil-shadow: inset 0 1px 0 rgba(255, 255, 255, 60%);
+
+  /* ===== 玻璃卡面 ===== */
+  --card-bg: linear-gradient(180deg, rgba(255, 255, 255, 54%), rgba(255, 255, 255, 46%));
+  --card-line: rgba(255, 255, 255, 70%);
+  --card-line-hover: rgba(255, 255, 255, 95%);
+  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 72%);
+  --card-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 85%);
+
+  --card: rgba(255, 255, 255, 50%);
+  --card-hi: rgba(255, 255, 255, 80%);
+  --card-soft: rgba(255, 255, 255, 34%);
+  --card-top: rgba(255, 255, 255, 54%);
+  --card-bottom: rgba(255, 255, 255, 46%);
+  --surface-highlight: inset 0 1px 0 rgba(255, 255, 255, 72%);
+  --shadow-float: 0 24px 50px rgba(20, 20, 45, 18%);
+
+  /* ===== 实物照片卡片（3.1 新 UI） ===== */
+  --pcard-bg: linear-gradient(180deg, rgba(255, 255, 255, 86%), rgba(255, 255, 255, 70%));
+  --pcard-wm: rgba(24, 24, 27, 10%);
+  --pcard-glow: rgba(120, 145, 190, 16%);
+  --card-img-shadow: drop-shadow(0 10px 12px rgba(30, 35, 50, 15%));
+
+  /* ===== 控件 ===== */
+  --ctrl-bg: linear-gradient(180deg, rgba(255, 255, 255, 64%), rgba(255, 255, 255, 52%));
+  --ctrl-bg-hover: linear-gradient(180deg, rgba(255, 255, 255, 86%), rgba(255, 255, 255, 72%));
+  --ctrl-line: rgba(255, 255, 255, 78%);
+  --ctrl-line-hover: rgba(255, 255, 255, 98%);
+  --ctrl-shadow: inset 0 1px 0 rgba(255, 255, 255, 70%);
+  --ctrl-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 85%);
+  --stepper-hover: rgba(255, 255, 255, 82%);
+
+  --cta-bg: linear-gradient(180deg, #202228, #141519);
+  --cta-fg: #ffffff;
+  --cta-line: rgba(255, 255, 255, 10%);
+  --cta-shadow: inset 0 1px 0 rgba(255, 255, 255, 14%);
+  --cta-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 18%);
+
+  --seg-bg: rgba(150, 158, 175, 16%);
+  --seg-line: rgba(255, 255, 255, 55%);
+  --seg-shadow: inset 0 1px 2px rgba(25, 28, 44, 6%);
+  --seg-on-bg: linear-gradient(180deg, rgba(255, 255, 255, 92%), rgba(255, 255, 255, 72%));
+  --seg-on-line: rgba(255, 255, 255, 95%);
+  --seg-on-shadow: 0 2px 6px rgba(25, 28, 44, 8%), inset 0 1px 0 #fff;
+
+  --toggle-track: rgba(140, 150, 170, 30%);
+  --toggle-line: rgba(255, 255, 255, 60%);
+  --toggle-knob: #ffffff;
+  --switch-bg: #212121;
+  --switch-fg: #e8e8e8;
+
+  /* ===== 侧栏导航光轨 ===== */
+  --nav-line: rgba(120, 120, 130, 18%);
+  --nav-glow: rgba(47, 128, 228, 10%);
+  --rail-core: color-mix(in srgb, var(--accent) 80%, #fff);
+  --rail-hot: color-mix(in srgb, var(--accent) 72%, #fff);
+  --nav-hover: rgba(255, 255, 255, 34%);
+  --nav-hover-line: rgba(255, 255, 255, 50%);
+  --nav-on-bg: linear-gradient(180deg, rgba(255, 255, 255, 72%), rgba(255, 255, 255, 46%));
+  --nav-on-line: rgba(255, 255, 255, 92%);
+  --nav-on-shadow: 0 6px 16px rgba(25, 28, 44, 7%), inset 0 1px 0 rgba(255, 255, 255, 88%);
+
+  /* ===== 小部件 / 杂项 ===== */
+  --danger-bg: rgba(211, 112, 112, 18%);
+  --danger-line: rgba(211, 112, 112, 34%);
+  --live-bg: rgba(34, 160, 107, 14%);
+  --thumb: rgba(60, 65, 76, 30%);
+  --dot-ring: 0 0 0 3px rgba(255, 255, 255, 65%);
+  --chip-bg-mix: rgba(255, 255, 255, 42%);
+  --chip-text-mix: #16181d;
+  --brand-shadow: 0 5px 12px rgba(20, 20, 45, 16%);
+  --sel: rgba(47, 128, 228, 20%);
+  --desk-solid: #d9e1ec;
+  /* 壁纸平移后露出的填充色（浅色主题白） */
+  --wallpaper-fill: #ffffff;
+  --bg: var(--desk-solid);
+  --bg-lift: var(--desk-solid);
+  /* 下拉/浮层实色底：与浅色玻璃卡面同族的柔白蓝 */
+  --menu-solid: #f2f6fb;
+}

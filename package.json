@@ -1,0 +1,28 @@
+{
+  "name": "vxe",
+  "private": true,
+  "version": "3.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.12.4",
+    "@tauri-apps/plugin-global-shortcut": "~2.4.1",
+    "@tauri-apps/plugin-opener": "^2",
+    "lottie-web": "^5.13.0",
+    "pinia": "^4.1.0",
+    "vue": "3.5.45"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "typescript": "5.9.3",
+    "vite": "^8.0.16",
+    "vue-tsc": "3.3.14"
+  }
+}

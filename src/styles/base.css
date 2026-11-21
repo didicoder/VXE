@@ -1,0 +1,361 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--txt);
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--txt);
+}
+
+input,
+textarea {
+  caret-color: var(--accent);
+}
+
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 浮层进出：窗口由 Rust show/hide，前端只负责内容帧的淡入/微缩放 */
+.window-enter {
+  animation: window-enter var(--dur-enter) var(--ease-out) both;
+}
+
+.window-leave {
+  animation: window-leave var(--dur-exit) var(--ease-in-out) both;
+}
+
+@keyframes window-enter {
+  from {
+    opacity: 0;
+    transform: scale(calc(var(--s, 1) * 0.99)) translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(var(--s, 1)) translateY(0);
+  }
+}
+
+@keyframes window-leave {
+  from {
+    opacity: 1;
+    transform: scale(var(--s, 1)) translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(calc(var(--s, 1) * 0.995)) translateY(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .window-enter,
+  .window-leave,
+  .page-enter-active,
+  .page-leave-active {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* 主题切换：旧帧垫底不动，新帧从触发按钮的圆心向外揭开 */
+html.is-theme-switching::view-transition-old(root),
+html.is-theme-switching::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html.is-theme-switching::view-transition-old(root) {
+  z-index: 0;
+}
+
+html.is-theme-switching::view-transition-new(root) {
+  z-index: 1;
+  animation: theme-circle-reveal 750ms ease-in-out both;
+}
+
+@keyframes theme-circle-reveal {
+  from {
+    clip-path: circle(0px at var(--theme-circle-x, 50%) var(--theme-circle-y, 50%));
+  }
+
+  to {
+    clip-path: circle(var(--theme-circle-r, 150vmax) at var(--theme-circle-x, 50%) var(--theme-circle-y, 50%));
+  }
+}
+
+/* 反向收起（reverse auto 的「切亮」）：旧主题圆面缩回触发点，新主题从四周显出 */
+html.is-theme-switching.is-theme-switching--collapse::view-transition-old(root) {
+  z-index: 1;
+  animation: theme-circle-collapse 750ms ease-in-out both;
+}
+
+html.is-theme-switching.is-theme-switching--collapse::view-transition-new(root) {
+  z-index: 0;
+  animation: none;
+}
+
+@keyframes theme-circle-collapse {
+  from {
+    clip-path: circle(var(--theme-circle-r, 150vmax) at var(--theme-circle-x, 50%) var(--theme-circle-y, 50%));
+  }
+
+  to {
+    clip-path: circle(0px at var(--theme-circle-x, 50%) var(--theme-circle-y, 50%));
+  }
+}
+
+.window-card {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--txt);
+  border-radius: var(--window-radius, var(--r-window));
+  box-shadow: var(--window-rim);
+  overflow: hidden;
+}
+
+.main-placeholder,
+.popup-placeholder,
+.tooltip-placeholder,
+.alert-placeholder,
+.add-placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.main-placeholder h1,
+.popup-placeholder h1,
+.tooltip-placeholder h1,
+.alert-placeholder h1,
+.add-placeholder h1 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.main-placeholder p,
+.popup-placeholder p,
+.tooltip-placeholder p,
+.alert-placeholder p,
+.add-placeholder p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ============================================================
+ * Whisper Glass 共享外观（glass-a-full-preview.html 定稿）
+ * 组件只负责几何与内容，表面质感统一走这三个工具类。
+ * ============================================================ */
+
+/* 玻璃卡面：半透明渐变 + 背景模糊 + 白发丝线；悬停加深 */
+/* mask 把绘制（含 backdrop-filter 模糊层与外投影）裁进圆角，避免边缘/圆角处的灰色毛边 */
+.glass-card {
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-card);
+  background: var(--card-bg);
+  background-size: var(--card-bg-size, auto);
+  background-repeat: var(--card-bg-repeat, repeat);
+  -webkit-backdrop-filter: blur(var(--card-blur)) saturate(var(--card-sat));
+  backdrop-filter: blur(var(--card-blur)) saturate(var(--card-sat));
+  box-shadow: var(--card-shadow);
+  -webkit-mask-image: linear-gradient(#000 0 0);
+  mask-image: linear-gradient(#000 0 0);
+  transition:
+    transform 0.26s var(--ease),
+    box-shadow 0.26s ease,
+    border-color 0.18s ease;
+}
+
+/* 卡面不做 hover 变化：设置页滚动时 hover 过渡会重绘 backdrop-filter 层，导致字体发虚 */
+.glass-card--lift {
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.glass-card--lift:hover {
+  transform: translateY(var(--lift));
+  border-color: var(--card-line-hover);
+  box-shadow: var(--card-shadow-hover);
+}
+
+/* 窗口壁纸：JS 注入 .wallpaper-layer（整张图按 cover×缩放排版、平移在图片内部进行）；
+ * 注入前先用内置壁纸兜底，注入后隐藏。主题渐变/暗化层在 ::before。 */
+.glass-window {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  /* 壁纸平移后露出的部分：浅色主题白、深色主题黑 */
+  background-color: var(--wallpaper-fill);
+}
+
+.glass-window::after {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  content: "";
+  background-image: url("../assets/wallpaper.jpg");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  pointer-events: none;
+}
+
+.has-wallpaper-layer .glass-window::after {
+  display: none;
+}
+
+.wallpaper-layer {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--wallpaper-fill);
+  pointer-events: none;
+}
+
+.wallpaper-layer__image {
+  position: absolute;
+  max-width: none;
+  max-height: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.glass-window::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  background-color: rgb(0 0 0 / calc(var(--bg-dim, 0) * 1%));
+  background-image: var(--win-bg);
+  background-size: var(--win-bg-size);
+  background-position: var(--win-bg-position);
+  background-repeat: var(--win-bg-repeat);
+  pointer-events: none;
+}
+
+/* 自定义壁纸可能很花：垫一层磨砂保证玻璃元素可读；内置壁纸保持原观感 */
+.has-custom-wallpaper .glass-window::before {
+  -webkit-backdrop-filter: blur(var(--bg-blur, 12px)) saturate(115%);
+  backdrop-filter: blur(var(--bg-blur, 12px)) saturate(115%);
+}
+
+/* 磨砂强度为 0 时彻底关闭整窗背景采样（blur(0) + saturate 仍会走合成层） */
+.has-custom-wallpaper.no-wallpaper-blur .glass-window::before {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* 44×44 控件按钮（刷新/最小化/关闭等） */
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--ctrl-line);
+  border-radius: var(--r-ctrl);
+  background: var(--ctrl-bg);
+  box-shadow: var(--ctrl-shadow);
+  color: var(--icon-muted);
+  cursor: pointer;
+  transition:
+    background var(--speed) var(--ease),
+    border-color var(--speed) var(--ease),
+    color var(--speed) var(--ease),
+    box-shadow var(--speed) var(--ease);
+}
+
+.icon-btn:hover {
+  background: var(--ctrl-bg-hover);
+  border-color: var(--ctrl-line-hover);
+  color: var(--ink);
+  box-shadow: var(--ctrl-shadow-hover);
+}
+
+.icon-btn--close:hover {
+  background: var(--danger-bg);
+  border-color: var(--danger-line);
+  color: var(--red-text);
+}
+
+/* ============================================================
+ * 滚动条：只在滑动时出现（`lib/scrollFade.ts` 在滚动期间打 data-scrolling）
+ * 用法：给滚动容器加 `.fade-scroll`，不要自己写 ::-webkit-scrollbar 拇指颜色。
+ * ============================================================ */
+.fade-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+/* 让滚轮/触控板滚动始终落在容器上，但滚动条槽固定占位，内容不会因出现/消失而抖动 */
+.fade-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.fade-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.fade-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 99px;
+  background: transparent;
+  background-clip: content-box;
+}
+
+.fade-scroll[data-scrolling] {
+  scrollbar-color: var(--thumb) transparent;
+}
+
+.fade-scroll[data-scrolling]::-webkit-scrollbar-thumb {
+  background: var(--thumb);
+  background-clip: content-box;
+}
+
+/* ===== 拖拽排序状态（useDragReorder 自研指针拖拽） ===== */
+/* 拿起：卡片抬起感（位移由内联 transform 负责） */
+.drag-lift {
+  z-index: 30;
+  cursor: grabbing;
+  box-shadow: 0 24px 50px rgb(0 0 0 / 45%);
+  will-change: transform;
+}
+
+/* 让位中的其他卡片：平移过渡 */
+.drag-shift {
+  will-change: transform;
+}
