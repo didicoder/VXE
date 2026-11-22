@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { PhysicalPosition } from '@tauri-apps/api/dpi';
 import { getCurrentAlert, saveAlertPosition } from '../lib/ipc';
+import { initializeWindow } from '../lib/windowLifecycle';
 import { clamp } from '../lib/geometry';
 import { useWindowScale } from '../composables/useWindowScale';
 import { useConfigStore } from '../stores/config';
@@ -138,7 +139,7 @@ async function onKeydown(event: KeyboardEvent): Promise<void> {
   await getCurrentWindow().setPosition(new PhysicalPosition(positionX, positionY));
 }
 
-onMounted(async () => {
+onMounted(() => initializeWindow(async () => {
   await config.load();
   unlisten = await listen<AlertPayload>('alert-show', (event) => show(event.payload));
   unlistenPreview = await listen<AlertPayload | null>('alert-preview', (event) =>
@@ -153,7 +154,7 @@ onMounted(async () => {
   show(current ?? { device: '设备', battery: 20, color: 'red' });
   await nextTick();
   measureText();
-});
+}));
 
 onUnmounted(() => {
   unlisten?.();

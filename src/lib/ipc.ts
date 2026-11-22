@@ -14,9 +14,20 @@ import type { AlertPayload } from '../types/alert'
 /** 预览/定位窗口的展示方式：`show` 展示后自动收回，`hold` 常驻，`hide` 立即隐藏。 */
 export type PreviewMode = 'show' | 'hold' | 'hide'
 
-/** 全局刷新：菜单/预览卡发起请求，主窗统一采集并播放圆形刷新；完成后广播 done。 */
+/** 全局刷新：菜单/预览卡请求 Rust 采集；主窗只根据开始/结束事件播放动效。 */
 export const REFRESH_REQUEST_EVENT = 'refresh-request'
+export const REFRESH_STARTED_EVENT = 'refresh-started'
 export const REFRESH_DONE_EVENT = 'refresh-done'
+
+/** 当前调用窗口已完成初始化及事件订阅，Rust 此后才显示并派发首次打开事件。 */
+export function windowReady(): Promise<void> {
+  return invoke<void>('window_ready')
+}
+
+/** 当前托盘浮层复用窗口显示的逻辑内容。 */
+export function getTrayOverlayMode(): Promise<'popup' | 'tooltip'> {
+  return invoke<'popup' | 'tooltip'>('get_tray_overlay_mode')
+}
 
 /** 自定义壁纸变更后广播；各窗口收到后重新拉取并换上。 */
 export const BACKGROUND_CHANGED_EVENT = 'background-changed'
@@ -257,6 +268,16 @@ export function showSettings(): Promise<void> {
 /** 打开主窗并切到指定页（预览小窗/托盘菜单）。 */
 export function showMain(page: 'summary' | 'devices' | 'settings' = 'summary'): Promise<void> {
   return invoke<void>('show_main', { page })
+}
+
+/** 在挂载首个页面前读取原生目标页，不创建或显示窗口。 */
+export function getMainPage(): Promise<'summary' | 'devices' | 'settings'> {
+  return invoke('get_main_page')
+}
+
+/** 仅记忆主窗当前页，供窗口销毁后恢复；不创建或显示窗口。 */
+export function rememberMainPage(page: 'summary' | 'devices' | 'settings'): Promise<void> {
+  return invoke<void>('remember_main_page', { page })
 }
 
 /** 打开添加设备窗口。 */

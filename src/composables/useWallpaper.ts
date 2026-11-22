@@ -7,10 +7,11 @@
  * `background-changed` / `background-preview` 事件让各窗口重新排版。
  */
 
-import { onMounted, onUnmounted } from 'vue'
+import { getCurrentInstance, onMounted, onUnmounted } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import * as ipc from '../lib/ipc'
 import { wallpaperGeometry } from '../lib/wallpaperLayout'
+import { trackWindowInitialization } from '../lib/windowLifecycle'
 import wallpaperUrl from '../assets/wallpaper.jpg'
 
 interface ImageSize {
@@ -19,12 +20,22 @@ interface ImageSize {
 }
 
 const sizeCache = new Map<string, Promise<ImageSize>>()
+const layoutGenerations = new WeakMap<HTMLElement, number>()
+const hostsByOwner = new Map<object, Set<HTMLElement>>()
 let current: ipc.BackgroundState | null = null
 let observer: ResizeObserver | null = null
+let pipelinePromise: Promise<void> | null = null
+let pipelineGeneration = 0
+let unlisten: UnlistenFn[] = []
+let loadGeneration = 0
 
 function imageSize(src: string): Promise<ImageSize> {
   const cached = sizeCache.get(src)
-  if (cached) return cached
+  if (cached) {
+    sizeCache.delete(src)
+    sizeCache.set(src, cached)
+    return cached
+  }
   const pending = new Promise<ImageSize>((resolve, reject) => {
     const image = new Image()
     image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight })
@@ -32,7 +43,10 @@ function imageSize(src: string): Promise<ImageSize> {
     image.src = src
   })
   sizeCache.set(src, pending)
-  pending.catch(() => sizeCache.delete(src))
+  if (sizeCache.size > 2) sizeCache.delete(sizeCache.keys().next().value!)
+  pending.catch(() => {
+    if (sizeCache.get(src) === pending) sizeCache.delete(src)
+  })
   return pending
 }
 
@@ -56,7 +70,38 @@ function clampOffset(value: number): number {
   return Math.min(50, Math.max(-50, value))
 }
 
-async function layout(host: HTMLElement): Promise<void> {
+function hostsForOwner(owner: object): HTMLElement[] {
+  const instance = owner as { subTree?: { el?: unknown } }
+  const root = instance.subTree?.el
+  if (!(root instanceof HTMLElement)) return []
+  const hosts: HTMLElement[] = []
+  if (root.matches('.glass-window')) hosts.push(root)
+  hosts.push(...Array.from(root.querySelectorAll<HTMLElement>('.glass-window')))
+  return hosts
+}
+
+function isRegisteredHost(host: HTMLElement): boolean {
+  for (const hosts of hostsByOwner.values()) {
+    if (hosts.has(host)) return true
+  }
+  return false
+}
+
+function activeHosts(): HTMLElement[] {
+  const hosts = new Set<HTMLElement>()
+  for (const ownerHosts of hostsByOwner.values()) {
+    for (const host of ownerHosts) hosts.add(host)
+  }
+  return Array.from(hosts)
+}
+
+function isPipelineActive(generation: number): boolean {
+  return generation === pipelineGeneration && hostsByOwner.size > 0
+}
+
+async function layout(host: HTMLElement, generation: number): Promise<void> {
+  const layoutGeneration = (layoutGenerations.get(host) ?? 0) + 1
+  layoutGenerations.set(host, layoutGeneration)
   const image = ensureLayer(host)
   const src = current?.image ?? wallpaperUrl
   if (image.getAttribute('src') !== src) image.src = src
@@ -69,6 +114,11 @@ async function layout(host: HTMLElement): Promise<void> {
   } catch {
     return
   }
+  if (
+    !isPipelineActive(generation)
+    || layoutGenerations.get(host) !== layoutGeneration
+    || !isRegisteredHost(host)
+  ) return
   const ratio = Math.min(3, Math.max(1, current?.ratio ?? 1))
   const dx = clampOffset(current?.dx ?? 0)
   const dy = clampOffset(current?.dy ?? 0)
@@ -87,60 +137,105 @@ async function layout(host: HTMLElement): Promise<void> {
   image.style.top = `${geometry.top}px`
 }
 
-function apply(state: ipc.BackgroundState | null): void {
+function apply(state: ipc.BackgroundState | null, generation: number): void {
+  if (!isPipelineActive(generation)) return
   current = state
   const root = document.documentElement
   root.classList.toggle('has-custom-wallpaper', !!state?.image)
   root.classList.toggle('no-wallpaper-blur', (state?.blur ?? 12) <= 0)
   root.style.setProperty('--bg-blur', `${state?.blur ?? 12}px`)
   root.style.setProperty('--bg-dim', String(state?.dim ?? 0))
-  const hosts = Array.from(document.querySelectorAll<HTMLElement>('.glass-window'))
+  const hosts = activeHosts()
   if (!hosts.length) return
   root.classList.add('has-wallpaper-layer')
-  for (const host of hosts) void layout(host)
+  for (const host of hosts) void layout(host, generation)
 }
 
-async function sync(): Promise<void> {
+async function refresh(generation: number): Promise<void> {
+  const request = ++loadGeneration
+  let state: ipc.BackgroundState | null
   try {
-    apply(await ipc.getBackgroundState())
+    state = await ipc.getBackgroundState()
   } catch {
-    apply(null)
+    state = null
   }
+  if (!isPipelineActive(generation) || request !== loadGeneration) return
+  apply(state, generation)
+}
+
+async function startPipeline(generation: number): Promise<void> {
+  observer = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const host = entry.target
+      if (host instanceof HTMLElement && isPipelineActive(generation) && isRegisteredHost(host)) {
+        void layout(host, generation)
+      }
+    }
+  })
+  for (const host of activeHosts()) observer.observe(host)
+
+  const listeners: UnlistenFn[] = []
+  try {
+    listeners.push(await listen(ipc.BACKGROUND_CHANGED_EVENT, () => {
+      void refresh(generation)
+    }))
+    if (!isPipelineActive(generation)) {
+      for (const off of listeners) void off()
+      return
+    }
+    listeners.push(await listen(ipc.BACKGROUND_PREVIEW_EVENT, () => {
+      void refresh(generation)
+    }))
+    if (isPipelineActive(generation)) {
+      unlisten = listeners
+    } else {
+      for (const off of listeners) void off()
+      return
+    }
+  } catch {
+    for (const off of listeners) void off()
+  }
+  if (!isPipelineActive(generation)) return
+  await refresh(generation)
+}
+
+function ensurePipeline(): Promise<void> {
+  if (pipelinePromise) return pipelinePromise
+  const generation = ++pipelineGeneration
+  pipelinePromise = startPipeline(generation)
+  return pipelinePromise
+}
+
+function stopPipeline(): void {
+  ++pipelineGeneration
+  ++loadGeneration
+  observer?.disconnect()
+  observer = null
+  for (const off of unlisten) void off()
+  unlisten = []
+  pipelinePromise = null
 }
 
 /** 挂载时注入壁纸层，并监听保存/预览/尺寸变化。 */
 export function useWallpaper(): void {
-  let unlisten: UnlistenFn[] = []
+  const owner = getCurrentInstance()
+  if (!owner) return
 
-  onMounted(async () => {
-    void sync()
-    observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const host = entry.target
-        if (host instanceof HTMLElement) void layout(host)
-      }
-    })
-    for (const host of Array.from(document.querySelectorAll<HTMLElement>('.glass-window'))) {
-      observer.observe(host)
+  onMounted(() => {
+    const hosts = new Set(hostsForOwner(owner))
+    hostsByOwner.set(owner, hosts)
+    if (observer) {
+      for (const host of hosts) observer.observe(host)
     }
-    try {
-      unlisten = [
-        await listen(ipc.BACKGROUND_CHANGED_EVENT, () => {
-          void sync()
-        }),
-        await listen(ipc.BACKGROUND_PREVIEW_EVENT, () => {
-          void sync()
-        }),
-      ]
-    } catch {
-      // 非 Tauri 环境没有事件总线
-    }
+    void trackWindowInitialization(ensurePipeline())
   })
 
   onUnmounted(() => {
-    observer?.disconnect()
-    observer = null
-    for (const off of unlisten) off()
-    unlisten = []
+    const hosts = hostsByOwner.get(owner)
+    if (hosts) {
+      for (const host of hosts) observer?.unobserve(host)
+      hostsByOwner.delete(owner)
+    }
+    if (!hostsByOwner.size) stopPipeline()
   })
 }

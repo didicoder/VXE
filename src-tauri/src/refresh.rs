@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
+use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -67,28 +68,108 @@ fn low_notify_action(
     }
 }
 
+/// 原生后台是唯一自动采集调度器，界面不存在时也继续工作。
+#[derive(Default)]
+pub struct Scheduler {
+    revision: Mutex<u64>,
+    changed: Condvar,
+    last_result: Mutex<Option<Result<Vec<DeviceStatus>, String>>>,
+}
+
+pub fn reschedule(app: &AppHandle) {
+    if let Some(scheduler) = app.try_state::<Scheduler>()
+        && let Ok(mut revision) = scheduler.revision.lock()
+    {
+        *revision = revision.wrapping_add(1);
+        scheduler.changed.notify_one();
+    }
+}
+
 pub fn start(app: AppHandle) {
     let _ = std::thread::Builder::new()
         .name("vxe-refresh".to_string())
         .spawn(move || {
             loop {
                 let _ = read_and_store(&app);
-                let seconds = app
-                    .try_state::<AppState>()
-                    .and_then(|state| state.store.lock().ok().map(|store| store.refresh_seconds()))
-                    .unwrap_or(60);
-                std::thread::sleep(Duration::from_secs(seconds));
+                let scheduler = app.state::<Scheduler>();
+                let Ok(mut revision) = scheduler.revision.lock() else {
+                    return;
+                };
+                loop {
+                    let seconds = app
+                        .try_state::<AppState>()
+                        .and_then(|state| {
+                            state.store.lock().ok().map(|store| store.refresh_seconds())
+                        })
+                        .unwrap_or(60)
+                        .max(1);
+                    let observed = *revision;
+                    let Ok((next, timeout)) = scheduler.changed.wait_timeout_while(
+                        revision,
+                        Duration::from_secs(seconds),
+                        |current| *current == observed,
+                    ) else {
+                        return;
+                    };
+                    revision = next;
+                    if timeout.timed_out() {
+                        break;
+                    }
+                    // 手动刷新或间隔设置变更后，按最新配置重新计时。
+                }
             }
         });
 }
 
+pub fn request_manual(app: AppHandle) {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _ = manual_refresh(&app);
+    });
+}
+
+pub fn manual_refresh(app: &AppHandle) -> Result<Vec<DeviceStatus>, String> {
+    if let Some(main) = app.get_webview_window(window_mgr::MAIN)
+        && main.is_visible().unwrap_or(false)
+    {
+        let _ = main.emit("refresh-started", ());
+    }
+    let result = read_and_store(app);
+    let _ = app.emit(
+        "refresh-done",
+        serde_json::json!({"error": result.as_ref().err()}),
+    );
+    reschedule(app);
+    result
+}
+
 pub fn read_and_store(app: &AppHandle) -> Result<Vec<DeviceStatus>, String> {
     let state = app.try_state::<AppState>().ok_or("state missing")?;
+    let scheduler = app.state::<Scheduler>();
     let _refresh_guard = match state.refresh_lock.try_lock() {
         Ok(guard) => guard,
-        Err(_) => return current_statuses(&state),
+        Err(std::sync::TryLockError::WouldBlock) => {
+            // 与在途采集合并：等待真实结果，不能立即返回上一轮旧缓存。
+            let _guard = state
+                .refresh_lock
+                .lock()
+                .map_err(|_| "refresh lock poisoned")?;
+            return scheduler
+                .last_result
+                .lock()
+                .map_err(|_| "refresh result lock poisoned")?
+                .clone()
+                .unwrap_or_else(|| current_statuses(&state));
+        }
+        Err(_) => return Err("refresh lock poisoned".to_string()),
     };
+    let result = collect_and_store(app, &state);
+    if let Ok(mut last) = scheduler.last_result.lock() {
+        *last = Some(result.clone());
+    }
+    result
+}
 
+fn collect_and_store(app: &AppHandle, state: &AppState) -> Result<Vec<DeviceStatus>, String> {
     let (
         specs,
         profile_dirs,
@@ -292,17 +373,21 @@ fn show_alert(app: &AppHandle, payload: AlertPayload, play_sound: bool, sound_fi
             *current = Some(payload.clone());
         }
     }
-    window_mgr::show_alert(app);
-    let _ = app.emit("alert-show", &payload);
-    if play_sound {
-        play_alert_sound(app, sound_file);
-    }
+    window_mgr::show_alert_event(app, "alert-show", serde_json::json!(payload));
     let app = app.clone();
     let sound_file = sound_file.to_string();
     let _ = std::thread::Builder::new()
         .name("vxe-alert-queue".to_string())
         .spawn(move || {
-            std::thread::sleep(Duration::from_millis(5850));
+            // 冷创建完成、事件订阅就绪后才开始完整提醒时间线。
+            if window_mgr::wait_alert_visible(&app, Duration::from_secs(15)) {
+                if play_sound {
+                    play_alert_sound(&app, &sound_file);
+                }
+                std::thread::sleep(Duration::from_millis(5850));
+            } else {
+                window_mgr::hide(&app, window_mgr::ALERT);
+            }
             let Some(state) = app.try_state::<AppState>() else {
                 return;
             };
@@ -313,6 +398,9 @@ fn show_alert(app: &AppHandle, payload: AlertPayload, play_sound: bool, sound_fi
                 let next = queue.pop_front();
                 if next.is_none() {
                     state.alert_showing.store(false, Ordering::SeqCst);
+                    if let Ok(mut current) = state.current_alert.lock() {
+                        *current = None;
+                    }
                     window_mgr::hide(&app, window_mgr::ALERT);
                 }
                 next

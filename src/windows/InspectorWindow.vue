@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import CardInspector from '../components/devices/CardInspector.vue';
 import { useThemeClass } from '../composables/useThemeClass';
 import { useWallpaper } from '../composables/useWallpaper';
 import { useWindowMotion } from '../composables/useWindowMotion';
 import { useWindowScale } from '../composables/useWindowScale';
 import * as ipc from '../lib/ipc';
+import { initializeWindow } from '../lib/windowLifecycle';
 import { useCardImagesStore } from '../stores/cardImages';
 import { useConfigStore } from '../stores/config';
 import { useDevicesStore } from '../stores/devices';
@@ -37,14 +39,21 @@ const status = computed(() =>
 const image = computed(() => (targetId.value ? cardImages.imageFor(targetId.value) : null));
 const custom = computed(() => image.value !== null);
 
-function setTarget(id: string | null): void {
-  targetId.value = id;
-  pending = {};
-  imageError.value = '';
-  if (id) {
-    void cardImages.loadOne(id);
-    void enter();
+let targetIntent = 0;
+let targetRead: Promise<void> = Promise.resolve();
+watch(() => config.devices.map(d => [d.id, d.card_img ?? '']), () => {
+  cardImages.syncDevices(config.devices);
+  if (targetId.value) targetRead = cardImages.ensureImages([targetId.value]);
+}, { flush: 'sync' });
+function setTarget(id: string | null): Promise<void> {
+  if (targetId.value !== id) {
+    targetId.value = id;
+    pending = {};
+    imageError.value = '';
   }
+  targetRead = id ? cardImages.ensureImages([id]) : Promise.resolve();
+  if (id) void enter();
+  return targetRead;
 }
 
 async function finalizePending(): Promise<void> {
@@ -151,16 +160,21 @@ async function onReset(): Promise<void> {
 async function closeWindow(): Promise<void> {
   if (closing) return;
   closing = true;
-  await finalizePending();
-  await leave(async () => {
-    try {
-      await ipc.hideCardInspector();
-    } catch {
-      /* 非 Tauri 环境忽略 */
-    }
-  });
-  targetId.value = null;
-  closing = false;
+  try {
+    await finalizePending();
+    await leave(async () => {
+      try {
+        await ipc.hideCardInspector();
+      } catch {
+        /* 非 Tauri 环境忽略 */
+      }
+    });
+    targetId.value = null;
+  } catch (cause) {
+    imageError.value = `关闭失败：${ipc.errorMessage(cause)}`;
+  } finally {
+    closing = false;
+  }
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -172,12 +186,22 @@ function onKeydown(event: KeyboardEvent): void {
 
 let unlisten: UnlistenFn[] = [];
 
-onMounted(async () => {
+onMounted(() => initializeWindow(async () => {
+  const initialIntent = targetIntent;
   window.addEventListener('keydown', onKeydown, true);
+  try {
+    unlisten.push(await getCurrentWindow().onCloseRequested(async (event) => {
+      event.preventDefault();
+      await closeWindow();
+    }));
+  } catch {
+    /* 浏览器预览没有原生窗口 */
+  }
   try {
     unlisten.push(
       await listen<string>('inspector-open', (event) => {
-        setTarget(event.payload);
+        targetIntent += 1;
+        void setTarget(event.payload);
       }),
     );
     unlisten.push(
@@ -188,21 +212,29 @@ onMounted(async () => {
     );
     unlisten.push(
       await listen<string>(ipc.CARD_IMAGE_CHANGED_EVENT, (event) => {
-        if (event.payload === targetId.value) void cardImages.loadOne(event.payload);
+        if (!event.payload) return;
+        cardImages.invalidate(event.payload);
+        if (event.payload === targetId.value) targetRead = cardImages.ensureImages([event.payload]);
       }),
     );
   } catch {
     /* 浏览器预览/单测没有事件通道，忽略 */
   }
   await Promise.all([config.load(), deviceStore.loadCached()]);
-  void cardImages.loadAll(config.devices);
+  cardImages.syncDevices(config.devices);
   try {
     const target = await ipc.getCardInspectorTarget();
-    if (target) setTarget(target);
+    if (targetIntent === initialIntent && target) await setTarget(target);
   } catch {
     /* 非 Tauri 环境忽略 */
   }
-});
+  // 初始化期间切换目标或换图时，ready 等到最新目标资源稳定。
+  let pendingRead: Promise<void>;
+  do {
+    pendingRead = targetRead;
+    await pendingRead;
+  } while (pendingRead !== targetRead);
+}));
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown, true);

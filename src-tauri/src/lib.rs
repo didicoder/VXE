@@ -1,7 +1,39 @@
 // DEFAULTS 的 json! 宏嵌套较深，默认递归上限不够。
 #![recursion_limit = "256"]
 
-use tauri::{Manager, WebviewWindowBuilder};
+use std::ffi::OsStr;
+
+use tauri::{Listener, Manager};
+
+const WEBVIEW2_DEFAULT_BROWSER_ARGUMENTS: &str =
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection";
+
+pub(crate) fn browser_arguments(existing: &OsStr) -> String {
+    let existing = existing.to_string_lossy();
+    let has_disable_breakpad = existing
+        .split_whitespace()
+        .any(|argument| argument == "--disable-breakpad");
+    let has_disable_features = existing
+        .split_whitespace()
+        .any(|argument| argument.starts_with("--disable-features="));
+    let mut arguments = String::new();
+    if !has_disable_features {
+        arguments.push_str(WEBVIEW2_DEFAULT_BROWSER_ARGUMENTS);
+    }
+    if !existing.trim().is_empty() {
+        if !arguments.is_empty() {
+            arguments.push(' ');
+        }
+        arguments.push_str(existing.trim());
+    }
+    if !has_disable_breakpad {
+        if !arguments.is_empty() {
+            arguments.push(' ');
+        }
+        arguments.push_str("--disable-breakpad");
+    }
+    arguments
+}
 
 mod autostart;
 mod battery;
@@ -19,6 +51,14 @@ mod winutil;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let existing = std::env::var_os("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default();
+    // SAFETY: no worker threads or WebView environments exist before application setup.
+    unsafe {
+        std::env::set_var(
+            "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+            browser_arguments(&existing),
+        );
+    }
     // WebView2 默认用户数据目录也钉到同一处：任何一个窗口漏设
     // `data_directory` 时，都不会在别处重新长出缓存。
     if let Some(dir) = window_mgr::webview_data_dir() {
@@ -28,30 +68,17 @@ pub fn run() {
         }
     }
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if !args.iter().any(|arg| arg == "--tray") {
+                window_mgr::show_main(app, "");
             }
         }))
+        .manage(window_mgr::Runtime::default())
+        .manage(refresh::Scheduler::default())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            // 主窗手动创建（tauri.conf 里 create:false），并固定 WebView2 用户数据目录，
-            // 让缓存与便携 exe 同级。
-            if let Some(conf) = app
-                .config()
-                .app
-                .windows
-                .iter()
-                .find(|w| w.label == window_mgr::MAIN)
-            {
-                let mut builder = WebviewWindowBuilder::from_config(app.handle(), conf)?;
-                if let Some(dir) = window_mgr::webview_data_dir() {
-                    builder = builder.data_directory(dir);
-                }
-                builder.build()?;
-            }
+            // 托盘常驻时不创建任何 WebView；界面按需创建，订阅就绪后才显示。
             let mut store = config::Store::load();
             let _ = store.migrate_scales();
             let _ = store.split_surfaces();
@@ -94,8 +121,11 @@ pub fn run() {
             if let Ok(exe) = std::env::current_exe() {
                 let _ = autostart::migrate(autostart, &exe);
             }
-            window_mgr::prewarm(app.handle());
-            window_mgr::apply_main_geometry(app.handle());
+            window_mgr::start_reaper(app.handle().clone());
+            let refresh_app = app.handle().clone();
+            app.listen("refresh-request", move |_| {
+                refresh::request_manual(refresh_app.clone());
+            });
             theme::apply(app.handle());
             theme::apply_icon_for_current(app.handle());
             theme::start(app.handle().clone());
@@ -107,6 +137,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::window_ready,
+            commands::remember_main_page,
+            commands::get_main_page,
+            commands::get_tray_overlay_mode,
             commands::get_config,
             commands::set_setting,
             commands::set_settings,
@@ -159,6 +193,18 @@ pub fn run() {
             commands::register_hotkey,
             commands::unregister_hotkey,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::MainEventsCleared) {
+                window_mgr::drain_actions(app);
+            }
+            // 回收最后一个 WebView 后继续托盘常驻；菜单显式 exit(0) 仍正常退出。
+            if let tauri::RunEvent::ExitRequested {
+                code: None, api, ..
+            } = event
+            {
+                api.prevent_exit();
+            }
+        });
 }

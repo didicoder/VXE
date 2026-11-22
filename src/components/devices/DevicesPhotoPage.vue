@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import DevicePhotoCard from './DevicePhotoCard.vue';
@@ -43,6 +43,46 @@ const presentDevices = computed(() =>
 const hiddenCount = computed(() => devices.value.length - presentDevices.value.length);
 
 const gridEl = ref<HTMLElement | null>(null);
+const scrollEl = ref<HTMLElement | null>(null);
+let visibilityObserver: IntersectionObserver | null = null;
+const observedCards = new Set<Element>();
+
+function observeCards(): void {
+  const grid = gridEl.value;
+  if (!visibilityObserver || !grid) return;
+  const cards = new Set(Array.from(grid.querySelectorAll<HTMLElement>('.pcard')));
+  for (const card of observedCards) {
+    if (cards.has(card as HTMLElement)) continue;
+    visibilityObserver.unobserve(card);
+    observedCards.delete(card);
+  }
+  for (const card of cards) {
+    if (observedCards.has(card)) continue;
+    observedCards.add(card);
+    visibilityObserver.observe(card);
+  }
+}
+
+function resetVisibilityObserver(): void {
+  if (!scrollEl.value || typeof IntersectionObserver === 'undefined') return;
+  visibilityObserver?.disconnect();
+  observedCards.clear();
+  visibilityObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!(entry.target instanceof HTMLElement)) continue;
+      const inRange = entry.isIntersecting;
+      entry.target.dataset.offscreen = inRange ? 'false' : 'true';
+      // drag-lift 在 CSS 中豁免离屏暂停，但不强制恢复动画。
+      entry.target.classList.toggle('is-offscreen', !inRange);
+    }
+  }, {
+    root: scrollEl.value,
+    rootMargin: `${devicesRowHeight(settings.value.photo_cols)}px 0px`,
+    threshold: 0,
+  });
+  observeCards();
+}
+
 /** 2 列一行、3 列两行，都按整页高度定卡片行高；多余卡片继续往下滚动。 */
 const gridStyle = computed(() => ({
   '--row-h': `${devicesRowHeight(settings.value.photo_cols)}px`,
@@ -127,6 +167,24 @@ watch(
 );
 
 watch(
+  () => presentDevices.value.map((device) => device.id),
+  async () => {
+    await nextTick();
+    observeCards();
+  },
+);
+
+watch(
+  () => settings.value.photo_cols,
+  async () => {
+    await nextTick();
+    resetVisibilityObserver();
+  },
+);
+
+onUpdated(observeCards);
+
+watch(
   () => props.editing,
   (editing) => {
     if (!editing) {
@@ -204,6 +262,9 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 onMounted(async () => {
+  resetVisibilityObserver();
+  await nextTick();
+  observeCards();
   window.addEventListener('keydown', onKeydown, true);
   try {
     unlisten.push(
@@ -230,6 +291,13 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   clearDeleteTimer();
   window.removeEventListener('keydown', onKeydown, true);
+  visibilityObserver?.disconnect();
+  visibilityObserver = null;
+  for (const card of observedCards) {
+    (card as HTMLElement).classList.remove('is-offscreen');
+    delete (card as HTMLElement).dataset.offscreen;
+  }
+  observedCards.clear();
   for (const off of unlisten) off();
   unlisten = [];
   if (props.activeId) hideInspectorWindow();
@@ -238,7 +306,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="page">
-    <div class="dev-scroll fade-scroll">
+    <div ref="scrollEl" class="dev-scroll fade-scroll">
       <div
         ref="gridEl"
         class="grid"
@@ -343,6 +411,11 @@ onBeforeUnmount(() => {
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent),
     var(--card-shadow-hover);
+}
+
+.grid :deep(.pcard.is-offscreen:not(.drag-lift)),
+.grid :deep(.pcard.is-offscreen:not(.drag-lift) *) {
+  animation-play-state: paused !important;
 }
 
 .tile-add {

@@ -4,7 +4,7 @@
  * base 仅用于旧配置兼容/迁移，不参与当前尺寸。
  *
  * 顶部箭头 8.5、左右内边距 17、头部 32.3、行高 42.5、最多 6 行、无按钮。
- * 显示/隐藏完全由 Rust 的托盘 hover 控制，这里不做自动隐藏；2 s 读一次缓存兜底。
+ * 显示/隐藏完全由 Rust 的托盘 hover 控制，状态由全局 store 的事件推送更新。
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -12,19 +12,21 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { storeToRefs } from 'pinia';
 import TipRow from '../components/tooltip/TipRow.vue';
 import { filterStatusesByDisplay } from '../lib/deviceCard';
+import { initializeWindow } from '../lib/windowLifecycle';
 import { useThemeClass } from '../composables/useThemeClass';
-import { useWallpaper } from '../composables/useWallpaper';
 import { useWindowMotion } from '../composables/useWindowMotion';
 import { useWindowScale } from '../composables/useWindowScale';
 import { useConfigStore } from '../stores/config';
 import { useDevicesStore } from '../stores/devices';
 
-defineProps<{ windowLabel?: string }>();
+const props = withDefaults(defineProps<{ windowLabel?: string; active?: boolean; managed?: boolean }>(), {
+  active: true,
+  managed: false,
+});
+const emitReady = defineEmits<{ ready: [] }>();
 
 /** 悬停卡最多 6 行（再多也没人看）。 */
 const MAX_ROWS = 6;
-/** 兜底同步间隔：错过 `devices-updated` 也能在 2 s 内追平。 */
-const SYNC_MS = 2000;
 
 const config = useConfigStore();
 const devices = useDevicesStore();
@@ -33,7 +35,6 @@ const { statuses } = storeToRefs(devices);
 
 const scale = useWindowScale('tip');
 useThemeClass();
-useWallpaper();
 const { entering, leaving, enter, leave } = useWindowMotion();
 
 const visible = computed(() =>
@@ -53,7 +54,6 @@ const syncText = computed(() => {
 let unlistenUpdated: UnlistenFn | null = null;
 let unlistenOpen: UnlistenFn | null = null;
 let unlistenClose: UnlistenFn | null = null;
-let timer: ReturnType<typeof setInterval> | null = null;
 
 async function sync(): Promise<void> {
   await devices.loadCached();
@@ -61,7 +61,9 @@ async function sync(): Promise<void> {
 }
 
 async function hideWindow(): Promise<void> {
+  if (props.active === false) return;
   await leave(async () => {
+    if (props.active === false) return;
     try {
       await getCurrentWindow().hide();
     } catch {
@@ -70,9 +72,9 @@ async function hideWindow(): Promise<void> {
   });
 }
 
-onMounted(async () => {
+async function initialize(): Promise<void> {
   unlistenUpdated = await listen('devices-updated', () => {
-    void sync();
+    syncedAt.value = Date.now();
   });
   unlistenOpen = await listen('tooltip-open', () => {
     void enter();
@@ -83,19 +85,20 @@ onMounted(async () => {
   });
   await config.load();
   await sync();
-  timer = setInterval(() => {
-    void sync();
-  }, SYNC_MS);
+}
+
+onMounted(() => {
+  if (props.managed) {
+    void initialize().then(() => emitReady('ready'), () => emitReady('ready'));
+    return;
+  }
+  void initializeWindow(initialize);
 });
 
 onUnmounted(() => {
   unlistenUpdated?.();
   unlistenOpen?.();
   unlistenClose?.();
-  if (timer !== null) {
-    clearInterval(timer);
-    timer = null;
-  }
 });
 </script>
 

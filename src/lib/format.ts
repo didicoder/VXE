@@ -12,3 +12,4 @@ export function percent(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '--'
   return `${Math.round(value)}%`
 }
+

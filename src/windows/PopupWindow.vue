@@ -15,19 +15,23 @@ import PopupFooter from '../components/popup/PopupFooter.vue';
 import PopupHeader from '../components/popup/PopupHeader.vue';
 import PopupRow from '../components/popup/PopupRow.vue';
 import { useThemeClass } from '../composables/useThemeClass';
-import { useWallpaper } from '../composables/useWallpaper';
 import { useWindowMotion } from '../composables/useWindowMotion';
 import { useWindowScale } from '../composables/useWindowScale';
 import { bandOf } from '../lib/bands';
 import { filterStatusesByDisplay } from '../lib/deviceCard';
 import { percent } from '../lib/format';
 import * as ipc from '../lib/ipc';
+import { initializeWindow } from '../lib/windowLifecycle';
 import { stats } from '../lib/state';
 import { useConfigStore } from '../stores/config';
 import { useDevicesStore } from '../stores/devices';
 import type { BatteryBand } from '../types/battery';
 
-defineProps<{ windowLabel?: string }>();
+const props = withDefaults(defineProps<{ windowLabel?: string; active?: boolean; managed?: boolean }>(), {
+  active: true,
+  managed: false,
+});
+const emitReady = defineEmits<{ ready: [] }>();
 
 /** 小窗最多显示 3 台，其余折成「还有 N 台」。 */
 const MAX_ROWS = 3;
@@ -52,7 +56,6 @@ const requested = ref(false);
 
 const scale = useWindowScale('popup');
 useThemeClass();
-useWallpaper();
 const { entering, leaving, enter, leave } = useWindowMotion();
 
 const shown = computed(() =>
@@ -89,8 +92,10 @@ const popupWindow = (() => {
 })();
 let open = false;
 let blurTimer: ReturnType<typeof setTimeout> | null = null;
+let blurGeneration = 0;
 
 function cancelBlurHide(): void {
+  blurGeneration += 1;
   if (blurTimer !== null) {
     clearTimeout(blurTimer);
     blurTimer = null;
@@ -98,9 +103,11 @@ function cancelBlurHide(): void {
 }
 
 function hideWindow(): void {
+  if (props.active === false) return;
   open = false;
   cancelBlurHide();
   void leave(async () => {
+    if (props.active === false) return;
     try {
       await popupWindow?.hide();
     } catch {
@@ -115,13 +122,16 @@ function hideWindow(): void {
  */
 function scheduleBlurHide(): void {
   cancelBlurHide();
+  const generation = blurGeneration;
   blurTimer = setTimeout(async () => {
     blurTimer = null;
+    let focused = false;
     try {
-      if (popupWindow && (await popupWindow.isFocused())) return;
+      focused = !!popupWindow && await popupWindow.isFocused();
     } catch {
       // 取不到焦点状态就按失焦处理
     }
+    if (generation !== blurGeneration || props.active === false || hold.value || focused) return;
     hideWindow();
   }, BLUR_HIDE_MS);
 }
@@ -136,12 +146,15 @@ function clearRequested(): void {
   }
 }
 
-/** 预览卡的刷新也交给主窗：与面板按钮、托盘菜单共用同一次采集和圆形遮罩。 */
+/** 预览卡只请求 Rust 采集，主窗可见时由开始事件驱动圆形遮罩。 */
 function requestRefresh(): void {
   clearRequested();
   requested.value = true;
   requestedTimer = setTimeout(clearRequested, REFRESH_FALLBACK_MS);
-  void emit(ipc.REFRESH_REQUEST_EVENT);
+  void emit(ipc.REFRESH_REQUEST_EVENT).catch((cause) => {
+    clearRequested();
+    console.error('刷新请求失败', cause);
+  });
 }
 
 function refresh(): void {
@@ -169,11 +182,8 @@ let unlistenClose: UnlistenFn | null = null;
 let unlistenFocus: UnlistenFn | null = null;
 let unlistenDone: UnlistenFn | null = null;
 
-onMounted(async () => {
-  unlistenUpdated = await listen('devices-updated', () => {
-    clearRequested();
-    void devices.loadCached();
-  });
+async function initialize(): Promise<void> {
+  unlistenUpdated = await listen('devices-updated', clearRequested);
   unlistenDone = await listen(ipc.REFRESH_DONE_EVENT, () => {
     clearRequested();
   });
@@ -183,10 +193,12 @@ onMounted(async () => {
     })) ?? null;
   // 菜单/设置页在 Rust 侧直接 hide 时复位，避免下次弹出漏播入场。
   unlistenClose = await listen('popup-close', () => {
+    if (props.active === false) return;
     open = false;
     cancelBlurHide();
   });
   unlistenOpen = await listen<boolean>('popup-open', (event) => {
+    if (props.active === false) return;
     hold.value = event.payload === true;
     cancelBlurHide();
     if (!open) {
@@ -200,6 +212,14 @@ onMounted(async () => {
   });
   await config.load();
   await devices.loadCached();
+}
+
+onMounted(() => {
+  if (props.managed) {
+    void initialize().then(() => emitReady('ready'), () => emitReady('ready'));
+    return;
+  }
+  void initializeWindow(initialize);
 });
 
 onUnmounted(() => {

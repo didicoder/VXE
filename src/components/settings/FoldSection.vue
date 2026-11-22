@@ -5,6 +5,7 @@
  * `disabled` 时整组置灰且不可修改（提醒方式只选另一项时用）。
  * `size="row"` 与普通设置行同大（顶层收纳用）；默认 `sub` 小号（二级收纳用）。
  */
+import { ref, watch } from 'vue';
 import MenuToggleIcon from '../icons/MenuToggleIcon.vue';
 
 const {
@@ -22,6 +23,16 @@ const {
 const emit = defineEmits<{
   toggle: [];
 }>();
+
+const mountedOnce = ref(expanded);
+watch(() => expanded, (value) => {
+  if (value) mountedOnce.value = true;
+});
+
+function toggle(): void {
+  if (!mountedOnce.value) mountedOnce.value = true;
+  emit('toggle');
+}
 </script>
 
 <template>
@@ -31,13 +42,13 @@ const emit = defineEmits<{
       class="fold__head"
       :aria-expanded="expanded"
       :disabled="disabled"
-      @click="emit('toggle')"
+      @click="toggle"
     >
       <MenuToggleIcon :size="size === 'row' ? 20 : 18" :active="expanded" />
       <span class="fold__title">{{ title }}</span>
       <span class="fold__hint">{{ expanded ? '收起' : '展开设置' }}</span>
     </button>
-    <div v-show="expanded" class="fold__body" :class="`fold__body--${size}`">
+    <div v-if="mountedOnce" v-show="expanded" class="fold__body" :class="`fold__body--${size}`">
       <slot />
     </div>
   </div>

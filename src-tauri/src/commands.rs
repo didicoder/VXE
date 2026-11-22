@@ -54,6 +54,23 @@ pub struct BackgroundState {
 }
 
 #[tauri::command]
+pub fn window_ready(window: tauri::WebviewWindow) -> Result<(), String> {
+    window_mgr::on_ready(&window)
+}
+
+#[tauri::command]
+pub fn get_main_page(app: AppHandle) -> String {
+    window_mgr::main_page(&app)
+}
+
+#[tauri::command]
+pub fn remember_main_page(app: AppHandle, page: String) {
+    if matches!(page.as_str(), "summary" | "devices" | "settings") {
+        window_mgr::remember_main_page(&app, &page);
+    }
+}
+
+#[tauri::command]
 pub fn get_config(state: State<'_, AppState>) -> Result<ConfigSnapshot, String> {
     let store = state.store.lock().map_err(|_| "config lock poisoned")?;
     Ok(config_snapshot(store.data(), store.devices()))
@@ -90,6 +107,7 @@ pub fn set_setting(
     drop(store);
     match key.as_str() {
         "autostart" => sync_autostart(value.as_bool().unwrap_or(false)),
+        "refresh_seconds" => refresh::reschedule(&app),
         "ui_base" | "ui_scale" => window_mgr::apply_main_geometry(&app),
         key if popup_layout_key(key) => window_mgr::relayout_popup(&app),
         key if tooltip_layout_key(key) => window_mgr::relayout_tooltip(&app),
@@ -114,6 +132,7 @@ pub fn set_settings(
 ) -> Result<(), String> {
     let autostart = patch.get("autostart").and_then(|value| value.as_bool());
     let mut store = state.store.lock().map_err(|_| "config lock poisoned")?;
+    let touch_refresh = patch.contains_key("refresh_seconds");
     let touch_scale = patch.contains_key("ui_base") || patch.contains_key("ui_scale");
     let touch_popup = patch.keys().any(|key| popup_layout_key(key));
     let touch_tip = patch.keys().any(|key| tooltip_layout_key(key));
@@ -132,6 +151,9 @@ pub fn set_settings(
     drop(store);
     if let Some(enabled) = autostart {
         sync_autostart(enabled);
+    }
+    if touch_refresh {
+        refresh::reschedule(&app);
     }
     if touch_scale {
         window_mgr::apply_main_geometry(&app);
@@ -308,7 +330,7 @@ pub fn get_devices(state: State<'_, AppState>) -> Vec<DeviceStatus> {
 
 #[tauri::command]
 pub async fn refresh_now(app: AppHandle) -> Result<Vec<DeviceStatus>, String> {
-    tauri::async_runtime::spawn_blocking(move || refresh::read_and_store(&app))
+    tauri::async_runtime::spawn_blocking(move || refresh::manual_refresh(&app))
         .await
         .map_err(|err| err.to_string())?
 }
@@ -406,16 +428,10 @@ pub fn preview_popup(app: AppHandle, mode: Option<String>) {
 #[tauri::command]
 pub fn preview_tooltip(app: AppHandle, mode: Option<String>) {
     let mode = mode.unwrap_or_else(|| "show".to_string());
-    let hold = mode == "hold";
-    if let Some(state) = app.try_state::<AppState>() {
-        state
-            .tooltip_hold
-            .store(hold, std::sync::atomic::Ordering::SeqCst);
-    }
     if mode == "hide" {
-        window_mgr::hide_tooltip(&app);
+        window_mgr::hide_tooltip_preview(&app);
     } else {
-        window_mgr::show_tooltip(&app, hold);
+        window_mgr::show_tooltip(&app, mode == "hold");
     }
     let _ = app.emit("preview-tooltip", mode);
 }
@@ -437,11 +453,7 @@ fn relayout_alert_preview(app: &AppHandle) {
     if !visible {
         return;
     }
-    window_mgr::show_alert(app);
-    let _ = app.emit(
-        "alert-preview",
-        Option::<crate::refresh::AlertPayload>::None,
-    );
+    window_mgr::show_alert_event(app, "alert-preview", Value::Null);
 }
 
 #[tauri::command]
@@ -457,9 +469,8 @@ pub fn preview_alert(app: AppHandle, mode: Option<String>) {
         window_mgr::hide(&app, window_mgr::ALERT);
         return;
     }
-    window_mgr::show_alert(&app);
     let payload = crate::refresh::sample_alert(&app);
-    let _ = app.emit("alert-preview", payload);
+    window_mgr::show_alert_event(&app, "alert-preview", serde_json::json!(payload));
 }
 
 #[tauri::command]
@@ -474,9 +485,7 @@ pub fn start_alert_position(app: AppHandle) {
             .alert_preview
             .store(false, std::sync::atomic::Ordering::SeqCst);
     }
-    window_mgr::show_alert(&app);
-    window_mgr::set_alert_position_mode(&app, true);
-    let _ = app.emit("alert-position-start", ());
+    window_mgr::show_alert_event(&app, "alert-position-start", Value::Null);
 }
 
 #[tauri::command]
@@ -539,11 +548,8 @@ pub fn register_hotkey(app: AppHandle, accelerator: String) -> bool {
     if app
         .global_shortcut()
         .on_shortcut(shortcut, |app, _shortcut, event| {
-            if event.state() == ShortcutState::Pressed
-                && let Some(window) = app.get_webview_window("main")
-            {
-                let _ = window.show();
-                let _ = window.set_focus();
+            if event.state() == ShortcutState::Pressed {
+                window_mgr::show_main(app, "");
             }
         })
         .is_err()
@@ -594,6 +600,11 @@ pub fn show_main(app: AppHandle, page: Option<String>) {
 }
 
 #[tauri::command]
+pub fn get_tray_overlay_mode(app: AppHandle) -> String {
+    window_mgr::tray_overlay_mode(&app).to_owned()
+}
+
+#[tauri::command]
 pub fn show_add(app: AppHandle) -> Result<(), String> {
     window_mgr::show_add(&app)
 }
@@ -607,9 +618,8 @@ pub fn show_card_inspector(
     if let Ok(mut slot) = state.inspector_target.lock() {
         *slot = Some(device_id.clone());
     }
-    window_mgr::show_inspector(&app)?;
-    let _ = app.emit_to(window_mgr::INSPECTOR, "inspector-open", device_id);
-    Ok(())
+    // The lifecycle manager emits inspector-open after the window is ready.
+    window_mgr::show_inspector(&app)
 }
 
 #[tauri::command]
@@ -1047,6 +1057,7 @@ pub fn reset_settings(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
         }
     }
     drop(store);
+    refresh::reschedule(&app);
     // 页面背景一并恢复默认：删掉自定义壁纸，回到内置壁纸
     let _ = std::fs::remove_file(background_path());
     if let Ok(mut draft) = state.background_draft.lock() {

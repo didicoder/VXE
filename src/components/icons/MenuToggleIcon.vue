@@ -7,7 +7,8 @@
  * 描边走 currentColor，随主题取色。
  */
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import lottie, { type AnimationItem } from 'lottie-web';
+import type { AnimationItem } from 'lottie-web';
+import lottie from 'lottie-web/build/player/lottie_light';
 import animationData from '../../assets/menu4.json';
 
 const {

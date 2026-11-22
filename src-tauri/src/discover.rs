@@ -331,9 +331,7 @@ pub fn scan(dirs: &[PathBuf], known: &[DeviceSpec]) -> Vec<DiscoveredDevice> {
         if device.vid.is_empty() || device.pid.is_empty() {
             continue;
         }
-        let candidate = device.usage_page >= 0xFF00
-            || (device.is_bluetooth && matches!(device.usage_page, 0x01 | 0x84));
-        if !candidate {
+        if !is_hid_candidate(&device) {
             continue;
         }
         let key = format!(
@@ -827,6 +825,15 @@ fn model_label(label: &str) -> String {
         }
     }
     out.trim().to_string()
+}
+
+fn is_hid_candidate(device: &hid::HidDevice) -> bool {
+    device.usage_page >= 0xFF00
+        || (device.is_bluetooth && matches!(device.usage_page, 0x01 | 0x84))
+        || (device.vid.eq_ignore_ascii_case("03F0")
+            && device.pid.eq_ignore_ascii_case("02CC")
+            && device.usage_page == 0x01C0
+            && device.usage == 0x0001)
 }
 
 fn guess_icon(usage_page: u16, usage: u16, bluetooth: bool, label: &str) -> String {

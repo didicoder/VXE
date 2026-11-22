@@ -78,6 +78,16 @@ pub fn choice(model: &Model) -> ModelChoice {
 
 /// 显式拆分的型号。未列出的协议自动生成同 id 型号。
 const MODELS_JSON: &str = r#"{
+  "rainy75-keyboard": {
+    "label": "Rainy 75 键盘",
+    "vendor": "WOB / Rainy75",
+    "icon": "keyboard",
+    "link": "2.4G",
+    "profile": "rainy75-keyboard",
+    "known_ids": [{"vid": "320F", "pid": "5088", "wired_pid": ""}],
+    "products": ["RAINY 75", "RAINY75"],
+    "keywords": "Rainy 75 WOB"
+  },
   "vxe-r1": {
     "label": "VXE R1 鼠标",
     "vendor": "VXE",

@@ -137,9 +137,25 @@ withDefaults(
   }
 }
 
-/* 没有读数：灰色、静止、降低存在感 */
+/* 没有读数：三圈保留为固定的灰色构图，不启动动画。 */
 .orb--none .orb__ring {
   border-color: color-mix(in srgb, var(--orb-color) 45%, var(--card-line));
+  animation: none;
+  opacity: 0.28;
+}
+
+.orb--none .orb__ring:nth-child(1) {
+  transform: scale(0.82);
+}
+
+.orb--none .orb__ring:nth-child(2) {
+  transform: scale(1.12);
+  opacity: 0.2;
+}
+
+.orb--none .orb__ring:nth-child(3) {
+  transform: scale(1.42);
+  opacity: 0.12;
 }
 
 .orb--none .orb__core svg {

@@ -204,8 +204,8 @@ fn parse_ids(path: &str) -> (String, String, bool) {
     )
 }
 
-/// 同一接收器的多个 collection 共用实例键：取路径中的实例段；
-/// 两个同 VID/PID 的接收器会得到不同的哈希。
+/// 同一接收器的多个 collection 共用实例键：路径里 `#8&687e681&0&0003#` 的
+/// `8&687e681`；两个同 VID/PID 的接收器会得到不同的哈希。
 fn instance_of(path: &str) -> String {
     let low = path.to_ascii_lowercase();
     // `\\?\hid#<interface>#<instance>#{guid}`：实例是第三段。
@@ -595,34 +595,68 @@ fn query(
     in_len: usize,
     timeout_ms: u32,
 ) -> Option<Vec<u8>> {
+    query_matching(path, payload, out_len, in_len, timeout_ms, None)
+}
+
+fn query_matching(
+    path: &str,
+    payload: &[u8],
+    out_len: usize,
+    in_len: usize,
+    timeout_ms: u32,
+    profile: Option<&Profile>,
+) -> Option<Vec<u8>> {
     let handle = open_path(path, true, true)?;
+    let write_timeout = if profile.is_some_and(|p| p.id == "atk-a87-pro") {
+        400
+    } else {
+        timeout_ms
+    };
 
     let mut write_buffer = vec![0u8; out_len.max(1)];
     let copied = payload.len().min(write_buffer.len());
     write_buffer[..copied].copy_from_slice(&payload[..copied]);
-    let write = io_once(handle.raw(), IoOp::Write(&write_buffer), timeout_ms);
+    let write = io_once(handle.raw(), IoOp::Write(&write_buffer), write_timeout);
     if write.leaked {
         std::mem::forget(write_buffer);
         return None;
     }
-    write.transferred?;
-
-    let mut read_buffer = vec![0u8; in_len.max(1)];
-    let read = io_once(handle.raw(), IoOp::Read(&mut read_buffer), timeout_ms);
-    if read.leaked {
-        std::mem::forget(read_buffer);
+    let written = write.transferred? as usize;
+    if profile.is_some() && written != write_buffer.len() {
         return None;
     }
-    let count = read.transferred? as usize;
-    // V16 `nbytes = n or len(buf)`: a zero-byte report still counts as the whole
-    // buffer, which is what some receivers return on success.
-    let count = if count == 0 {
-        read_buffer.len()
-    } else {
-        count.min(read_buffer.len())
-    };
-    read_buffer.truncate(count);
-    Some(read_buffer)
+
+    let deadline = std::time::Instant::now() + Duration::from_millis(u64::from(timeout_ms));
+    loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return None;
+        }
+        let mut read_buffer = vec![0u8; in_len.max(1)];
+        let read = io_once(
+            handle.raw(),
+            IoOp::Read(&mut read_buffer),
+            remaining.as_millis().clamp(1, u128::from(u32::MAX)) as u32,
+        );
+        if read.leaked {
+            std::mem::forget(read_buffer);
+            return None;
+        }
+        let count = read.transferred? as usize;
+        // Preserve legacy zero-byte behavior only for existing unfiltered queries.
+        if count == 0 && profile.is_some() {
+            return None;
+        }
+        let count = if count == 0 {
+            read_buffer.len()
+        } else {
+            count.min(read_buffer.len())
+        };
+        read_buffer.truncate(count);
+        if profile.is_none_or(|p| parse_report(p, &read_buffer, false).0.is_some()) {
+            return Some(read_buffer);
+        }
+    }
 }
 
 /// V16 `read_feature`: `HidD_GetFeature` on a read-only handle.
@@ -824,7 +858,6 @@ fn sample(
     payload: &[u8],
 ) -> (Option<i64>, bool) {
     let request = &profile.request;
-    let response = &profile.response;
 
     let raw = match request.transport {
         Transport::FeatureRead => {
@@ -875,7 +908,17 @@ fn sample(
                 interface.in_len as usize,
             );
             let timeout_ms = profile.sampling.request_timeout_ms as u32;
-            query(&interface.dev.path, payload, out_len, in_len, timeout_ms)
+            if profile.id == "atk-a87-pro" && (interface.out_len != 33 || interface.in_len != 33) {
+                return (None, wired);
+            }
+            query_matching(
+                &interface.dev.path,
+                payload,
+                out_len,
+                in_len,
+                timeout_ms,
+                request.read_matching.then_some(profile),
+            )
         }
     };
 
@@ -891,7 +934,24 @@ fn sample(
             .collect::<Vec<_>>()
             .join(" ")
     ));
-    if raw.len() < response.min_length {
+    parse_report(profile, &raw, wired)
+}
+
+fn parse_report(profile: &Profile, raw: &[u8], wired: bool) -> (Option<i64>, bool) {
+    let response = &profile.response;
+    if raw.len() < response.min_length
+        || response
+            .exact_length
+            .is_some_and(|length| raw.len() != length)
+        || response
+            .markers
+            .iter()
+            .any(|(offset, byte)| raw.get(usize::from(*offset)) != Some(byte))
+        || (profile.id == "atk-a87-pro" && raw.get(4) == Some(&0) && raw.get(5) == Some(&0))
+    {
+        return (None, wired);
+    }
+    if profile.id == "hyperx-cloud-alpha-wireless" && !raw.starts_with(&[0x21, 0xBB, 0x0B]) {
         return (None, wired);
     }
     if let Some(offset) = response.status.offset.map(|offset| offset as usize) {
@@ -911,7 +971,7 @@ fn sample(
 
     let level_rule = &response.level;
     let level = parse_level(
-        &raw,
+        raw,
         level_rule.offset as usize,
         matches!(level_rule.encoding, LevelEncoding::U16Le),
         level_rule.min as i64,
@@ -926,7 +986,7 @@ fn sample(
 
     let charging_rule = &response.charging;
     let charging = is_charging(
-        &raw,
+        raw,
         charging_rule.offset.map(|offset| offset as usize),
         charging_rule.nonzero,
         charging_rule.when_charging.map(|value| value as i64),
@@ -934,6 +994,46 @@ fn sample(
         wired,
     );
     (Some(level), charging)
+}
+
+/// Sample without feeding a previous report's charging bit back into the wired-PID hint.
+fn collect_samples(
+    attempts: usize,
+    stable: usize,
+    wired_by_pid: bool,
+    mut read: impl FnMut(bool) -> (Option<i64>, bool),
+) -> (Vec<i64>, bool) {
+    let mut samples = Vec::with_capacity(attempts);
+    let mut charging = wired_by_pid;
+    for _ in 0..attempts {
+        let (level, current_charging) = read(wired_by_pid);
+        let Some(level) = level else {
+            continue;
+        };
+        charging = current_charging;
+        samples.push(level);
+        if samples.len() >= stable {
+            let tail = &samples[samples.len() - stable..];
+            if tail.iter().all(|value| *value == tail[0]) {
+                break;
+            }
+        }
+    }
+    (samples, charging)
+}
+
+fn matches_instance(device: &HidDevice, instance: &str) -> bool {
+    instance.is_empty() || device.instance == instance
+}
+
+fn matches_profile_pid(device: &HidDevice, profile: &Profile) -> bool {
+    // New filtered protocols never widen a read to another product of the vendor.
+    !profile.request.read_matching
+        || profile.known_ids.iter().any(|id| {
+            device.vid.eq_ignore_ascii_case(&id.vid)
+                && (device.pid.eq_ignore_ascii_case(&id.pid)
+                    || (!id.wired_pid.is_empty() && device.pid.eq_ignore_ascii_case(&id.wired_pid)))
+        })
 }
 
 /// Try every candidate interface in order; the first one that answers wins.
@@ -954,23 +1054,21 @@ fn try_interfaces(
 
     for interface in candidates {
         // An interface whose PID is the wired PID is charging by definition.
-        let mut wired = !wired_pid.is_empty() && interface.dev.pid == wired_pid;
-        let mut samples: Vec<i64> = Vec::with_capacity(attempts);
-        for _ in 0..attempts {
-            let (level, charging) = sample(interface, wired, profile, payload);
-            wired = charging;
-            let Some(level) = level else {
-                continue;
-            };
-            samples.push(level);
-            if samples.len() >= stable {
-                let tail = &samples[samples.len() - stable..];
-                if tail.iter().all(|value| *value == tail[0]) {
-                    break;
-                }
-            }
-        }
-        if let Some(result) = summarize(&samples, wired, pick) {
+        let wired_by_pid = !wired_pid.is_empty() && interface.dev.pid == wired_pid;
+        let (samples, charging) = collect_samples(attempts, stable, wired_by_pid, |wired| {
+            sample(interface, wired, profile, payload)
+        });
+        let result = if profile.request.read_matching && !samples.is_empty() {
+            // These new protocols validate sleep before sampling; a valid 0 is 0%.
+            Some(ReadResult {
+                state: BatteryState::Ok,
+                level: Some(pick_level(&samples, pick).clamp(0, 100) as u8),
+                charging,
+            })
+        } else {
+            summarize(&samples, charging, pick)
+        };
+        if let Some(result) = result {
             debug_log(&format!(
                 "iface answer {} samples {:?} -> {}",
                 interface.dev.path,
@@ -1011,22 +1109,13 @@ fn read_once(dev: &DeviceSpec, profile: &Profile) -> ReadResult {
         .into_iter()
         .filter(|interface| candidate_ok(&interface.dev, &vid, usage_page, usage, want_bluetooth))
         .collect();
-    // 实例路径在换 USB 口后会变：优先按实例绑定，找不到时退回 VID:PID，
-    // 避免已配置设备因为路径变化永远显示未连接。
-    let all: Vec<Interface> = if dev.instance.is_empty() {
-        matching
-    } else {
-        let filtered: Vec<Interface> = matching
-            .iter()
-            .filter(|interface| interface.dev.instance == dev.instance)
-            .cloned()
-            .collect();
-        if filtered.is_empty() {
-            matching
-        } else {
-            filtered
-        }
-    };
+    // 已绑定的接收器必须严格匹配；拔出或换端口后由添加页重新绑定，
+    // 不得静默读取另一台同 VID/PID 接收器。旧配置未存实例时保留兼容。
+    let all: Vec<Interface> = matching
+        .into_iter()
+        .filter(|interface| matches_instance(&interface.dev, &dev.instance))
+        .filter(|interface| matches_profile_pid(&interface.dev, profile))
+        .collect();
 
     // `require_pid_hit` is inverted: `false` means "exact PID first, then widen".
     if (!pid.is_empty() || !wired_pid.is_empty()) && !rule.require_pid_hit {

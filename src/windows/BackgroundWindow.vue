@@ -10,6 +10,8 @@ import { useThemeClass } from '../composables/useThemeClass';
 import { useWallpaper } from '../composables/useWallpaper';
 import { useWindowMotion } from '../composables/useWindowMotion';
 import { useWindowScale } from '../composables/useWindowScale';
+import { initializeWindow } from '../lib/windowLifecycle';
+import { useConfigStore } from '../stores/config';
 
 defineProps<{ windowLabel?: string }>();
 
@@ -20,7 +22,7 @@ const scale = useWindowScale('bg');
 
 let unlisten: UnlistenFn | null = null;
 
-onMounted(async () => {
+onMounted(() => initializeWindow(async () => {
   try {
     unlisten = await listen('bg-editor-open', () => {
       void enter();
@@ -28,7 +30,8 @@ onMounted(async () => {
   } catch {
     // 非 Tauri 环境没有事件总线
   }
-});
+  await useConfigStore().load();
+}));
 
 onUnmounted(() => {
   unlisten?.();

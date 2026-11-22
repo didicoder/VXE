@@ -7,47 +7,80 @@ import { nextTick, onUnmounted, ref } from 'vue';
 export function useWindowMotion() {
   const entering = ref(false);
   const leaving = ref(false);
-  let timer: ReturnType<typeof setTimeout> | null = null;
   let generation = 0;
+  let activeLeave: {
+    generation: number;
+    timer: ReturnType<typeof setTimeout> | null;
+    settle: (completed: boolean) => void;
+  } | null = null;
+
+  function settleLeave(
+    operation: NonNullable<typeof activeLeave>,
+    completed: boolean,
+  ): void {
+    if (activeLeave !== operation) return;
+    activeLeave = null;
+    if (operation.timer !== null) clearTimeout(operation.timer);
+    operation.timer = null;
+    operation.settle(completed);
+  }
+
+  function cancelLeave(): void {
+    if (activeLeave) settleLeave(activeLeave, false);
+  }
 
   async function enter(): Promise<void> {
-    generation += 1;
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
+    const current = ++generation;
+    cancelLeave();
     leaving.value = false;
     entering.value = false;
     await nextTick();
-    entering.value = true;
+    if (current === generation) entering.value = true;
   }
 
-  function leave(after: () => void | Promise<void>, ms = 140): Promise<void> {
+  function leave(after: () => void | Promise<void>, ms = 140): Promise<boolean> {
     const current = ++generation;
+    cancelLeave();
     entering.value = false;
     leaving.value = true;
-    if (timer !== null) clearTimeout(timer);
+
     return new Promise((resolve) => {
-      timer = setTimeout(async () => {
-        timer = null;
-        if (current !== generation) {
-          resolve();
+      const operation = {
+        generation: current,
+        timer: null as ReturnType<typeof setTimeout> | null,
+        settle: resolve,
+      };
+      activeLeave = operation;
+      operation.timer = setTimeout(() => {
+        operation.timer = null;
+        if (activeLeave !== operation || operation.generation !== generation) {
+          settleLeave(operation, false);
           return;
         }
-        try {
-          await after();
-        } finally {
-          leaving.value = false;
-          resolve();
-        }
+        void (async () => {
+          try {
+            await after();
+          } catch {
+            if (activeLeave === operation && operation.generation === generation) {
+              leaving.value = false;
+            }
+            settleLeave(operation, false);
+            return;
+          }
+          if (activeLeave === operation && operation.generation === generation) {
+            leaving.value = false;
+            settleLeave(operation, true);
+          } else {
+            settleLeave(operation, false);
+          }
+        })();
       }, ms);
     });
   }
 
   onUnmounted(() => {
     generation += 1;
-    if (timer !== null) clearTimeout(timer);
-    timer = null;
+    cancelLeave();
   });
 
   return { entering, leaving, enter, leave };

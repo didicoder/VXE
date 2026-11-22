@@ -13,6 +13,7 @@ import { useThemeClass } from '../composables/useThemeClass';
 import { useWallpaper } from '../composables/useWallpaper';
 import { useWindowMotion } from '../composables/useWindowMotion';
 import * as ipc from '../lib/ipc';
+import { initializeWindow } from '../lib/windowLifecycle';
 import { useConfigStore } from '../stores/config';
 import appIconDark from '../assets/app-icon-dark.png';
 import appIconLight from '../assets/app-icon-light.png';
@@ -30,21 +31,15 @@ const busy = ref(false);
 
 let unlistenOpen: UnlistenFn | null = null;
 
-async function hideWindow(): Promise<void> {
-  await leave(async () => {
-    try {
-      await getCurrentWindow().hide();
-    } catch {
-      /* 非 Tauri 环境忽略 */
-    }
-  });
+async function hideWindow(): Promise<boolean> {
+  return leave(() => getCurrentWindow().hide());
 }
 
 async function run(action: () => void | Promise<void>): Promise<void> {
   if (busy.value) return;
   busy.value = true;
-  await hideWindow();
   try {
+    if (!(await hideWindow())) return;
     await action();
   } finally {
     busy.value = false;
@@ -55,7 +50,7 @@ function openPanel(): void {
   void run(() => ipc.showMain('summary'));
 }
 
-/** 统一走主窗刷新：面板会播放圆形遮罩；面板没开时静默刷新。 */
+/** 交给 Rust 刷新：可见面板根据开始事件播放遮罩，不需要创建主窗。 */
 function refresh(): void {
   void run(() => emit(ipc.REFRESH_REQUEST_EVENT));
 }
@@ -74,7 +69,7 @@ function onBlur(): void {
   if (!busy.value) void hideWindow();
 }
 
-onMounted(async () => {
+onMounted(() => initializeWindow(async () => {
   await config.load();
   unlistenOpen = await listen('tray-menu-open', () => {
     void enter();
@@ -82,12 +77,7 @@ onMounted(async () => {
   });
   window.addEventListener('keydown', onKeydown);
   window.addEventListener('blur', onBlur);
-  try {
-    if (await getCurrentWindow().isVisible()) void enter();
-  } catch {
-    /* 非 Tauri 环境忽略 */
-  }
-});
+}));
 
 onUnmounted(() => {
   unlistenOpen?.();

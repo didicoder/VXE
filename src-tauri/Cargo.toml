@@ -1,6 +1,6 @@
 [package]
 name = "v17"
-version = "3.1.0"
+version = "3.2.1"
 description = "VXE 电量托盘"
 authors = ["VXE"]
 edition = "2024"

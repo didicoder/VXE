@@ -28,6 +28,15 @@ document.addEventListener("contextmenu", (event) => event.preventDefault());
 installScrollFade();
 
 app.use(pinia);
-void useConfigStore(pinia).startEvents();
-void useDevicesStore(pinia).startEvents();
-app.mount("#app");
+async function bootstrap(): Promise<void> {
+  const results = await Promise.allSettled([
+    useConfigStore(pinia).startEvents(),
+    useDevicesStore(pinia).startEvents(),
+  ]);
+  for (const result of results) {
+    if (result.status === 'rejected') console.error('全局事件订阅失败', result.reason);
+  }
+  app.mount("#app");
+}
+
+void bootstrap();

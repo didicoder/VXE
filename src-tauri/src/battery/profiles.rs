@@ -26,6 +26,54 @@ pub const DEFAULT_PROFILE: &str = "vxe-v3-nk";
 /// 内置协议：`vxe-v3-nk` 与 `profiles.py` 的 `BUILTIN` 逐字段一致；
 /// 其余为社区开源项目实测/公开协议整理（2.4G-battery-viewer / mouse-battery-monitor / GearPower）。
 const BUILTIN_JSON: &str = r#"{
+  "atk-a87-pro": {
+    "id": "atk-a87-pro", "label": "ATK A87 Pro 键盘", "vendor": "ATK", "keywords": "A87 PRO keyboard 键盘",
+    "notes": "协议事实来源 FerrisPulse a916c657c18034a30300dd08b33c6c192c86fb06 src/Hardware/AtkA87ProHelper.cs。373B:111F FF60:0061，33B Output/Input；02 96 24 联合校验；0电量且0状态为休眠帧。仅查询，不含设置命令；本地尚未真实硬件验收。",
+    "known_ids": [{"vid":"373B", "pid":"111F", "wired_pid":""}],
+    "match": {"usage_page":"0xFF60", "usage":"0x0061"},
+    "request": {"transport":"write_read", "payload_hex":"00 02 96 24", "out_len":33, "in_len":33, "read_matching":true},
+    "response": {"min_length":33, "exact_length":33, "markers":[[1,2],[2,150],[3,36]], "level":{"offset":4}, "charging":{"offset":5,"mask":1,"nonzero":true}},
+    "sampling": {"attempts":2,"stable_count":1,"request_timeout_ms":1200,"total_timeout_s":4.5,"pick":"last"}
+  },
+  "hyperx-cloud-iii-s-02cc": {
+    "id":"hyperx-cloud-iii-s-02cc", "label":"HyperX Cloud III S (Receiver 02CC)", "vendor":"HyperX", "keywords":"Cloud III S 02CC 耳机",
+    "notes":"协议事实来源 HyperBatteryMonitor 999d40bc1502d6e932c5c3df4e6a32d5f00c7158 Devices/Cloud3SAlternateReceiverDevice.cs。精确03F0:02CC、01C0:0001；仅查询selector06电量。充电selector48未接入；未推断其他接收器变体。本地尚未真实硬件验收。",
+    "known_ids":[{"vid":"03F0","pid":"02CC","wired_pid":""}],
+    "match":{"usage_page":"0x01C0","usage":"0x0001"},
+    "request":{"transport":"write_read","payload_hex":"0C 02 03 01 00 06","read_matching":true},
+    "response":{"min_length":7,"markers":[[0,12],[1,2],[2,3],[5,6]],"level":{"offset":6},"charging":{"offset":null}},
+    "sampling":{"attempts":2,"stable_count":1,"request_timeout_ms":1200,"total_timeout_s":4.5,"pick":"last"}
+  },
+  "rainy75-keyboard": {
+    "schema_version": 1,
+    "label": "Rainy 75 键盘",
+    "vendor": "WOB / Rainy75",
+    "keywords": "Rainy 75 WOB 键盘",
+    "notes": "来源 Rainy75Desktop：320F:5088、FF1C:0092、Report ID 04；查询帧 04 20 00 1A 06，回包 [3]=1A、[8]=电量、[9]=充电状态。与 VGN V98 Pro 共用 VID/PID，添加时需由用户按型号选择。该协议源于网页驱动逆向；VXE 尚未实机验证。",
+    "known_ids": [{"vid": "320F", "pid": "5088", "wired_pid": ""}],
+    "match": {"usage_page": "0xFF1C", "usage": "0x0092", "require_pid_hit": false},
+    "request": {
+      "transport": "write_read",
+      "payload_hex": "04 20 00 1A 06",
+      "out_len": null,
+      "in_len": null,
+      "report_id": null,
+      "read_matching": true
+    },
+    "response": {
+      "min_length": 10,
+      "status": {"offset": 3, "ok_values": [26]},
+      "level": {"offset": 8, "encoding": "u8", "min": 0, "max": 100, "scale": 1.0, "add": 0},
+      "charging": {"offset": 9, "nonzero": true}
+    },
+    "sampling": {
+      "attempts": 3,
+      "stable_count": 1,
+      "request_timeout_ms": 1200,
+      "total_timeout_s": 4.5,
+      "pick": "last"
+    }
+  },
   "vxe-v3-nk": {
     "schema_version": 1,
     "label": "VXE V3 NK / R1 Nearlink 鼠标",
@@ -1146,7 +1194,7 @@ const BUILTIN_JSON: &str = r#"{
     "schema_version": 1,
     "label": "HyperX Cloud Alpha Wireless 耳机",
     "vendor": "HyperX",
-    "notes": "来源 ArchWiki HeadsetControl 协议文档 + myfinder-device-battery A 级实机：FF43/0202 口 31 字节 21 BB 0B（0x21BB 前缀族，0B=查电量）；回包 21 BB 0B…，电量 offset 11（0x0B），offset 12（0x0C）=1 充电（同帧捎带，单查询可出充电态）。03F0:098D。",
+    "notes": "03F0:098D，FF43/0202口，21 BB 0B查询。3.2.0依据HeadsetControl d8865353 src/devices/hyperx_calphaw.c与HyperBatteryMonitor 999d40bc Devices/CloudAlphaWirelessDevice.cs交叉纠正：电量为回包offset3，不是0x0B命令值对应的offset11。充电必须独立21 BB 0C查询，本单步profile不推断充电；尚无本地硬件验收。",
     "known_ids": [{"vid": "03F0", "pid": "098D", "wired_pid": ""}],
     "match": {"usage_page": "0xFF43", "usage": "0x0202", "require_pid_hit": false},
     "request": {
@@ -1157,10 +1205,10 @@ const BUILTIN_JSON: &str = r#"{
       "report_id": null
     },
     "response": {
-      "min_length": 13,
+      "min_length": 4,
       "status": {"offset": 2, "ok_values": [11]},
-      "level": {"offset": 11, "encoding": "u8", "min": 0, "max": 100, "scale": 1.0, "add": 0},
-      "charging": {"offset": 12, "when_charging": 1}
+      "level": {"offset": 3, "encoding": "u8", "min": 0, "max": 100, "scale": 1.0, "add": 0},
+      "charging": {"offset": null}
     },
     "sampling": {
       "attempts": 3,
@@ -1628,6 +1676,8 @@ pub struct Request {
     pub out_len: Option<u16>,
     pub in_len: Option<u16>,
     pub report_id: Option<u8>,
+    /// Opt-in response filtering within one read deadline.
+    pub read_matching: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -1647,6 +1697,9 @@ pub enum Transport {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Response {
+    /// All byte markers must match; absent for legacy profiles.
+    pub markers: Vec<(u8, u8)>,
+    pub exact_length: Option<usize>,
     pub min_length: usize,
     pub status: StatusRule,
     pub level: LevelRule,
@@ -2014,6 +2067,30 @@ pub fn normalize(raw: &Value, source: &str, fallback_id: &str) -> Result<Profile
         return Err("response.min_length 必须在 1..1024".to_string());
     }
 
+    let exact_length = match int_of(sub(response_raw, "exact_length"), None) {
+        None => None,
+        Some(n) if (min_length..=1024).contains(&n) => Some(n as usize),
+        Some(_) => return Err("response.exact_length 必须在 min_length..1024".to_string()),
+    };
+    let markers = match sub(response_raw, "markers") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| {
+                let pair = item
+                    .as_array()
+                    .filter(|pair| pair.len() == 2)
+                    .ok_or_else(|| "response.markers 必须是 [offset, byte] 数组".to_string())?;
+                let offset = offset_of(pair.first(), "response.markers.offset", None)?;
+                let byte = as_int(&pair[1])
+                    .filter(|n| (0..=255).contains(n))
+                    .ok_or_else(|| "response.markers.byte 必须在 0..255".to_string())?;
+                Ok((offset, byte as u8))
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+        Some(_) => return Err("response.markers 必须是数组".to_string()),
+    };
+
     let status_raw = response_raw
         .and_then(|value| value.get("status"))
         .filter(|value| value.is_object());
@@ -2152,8 +2229,13 @@ pub fn normalize(raw: &Value, source: &str, fallback_id: &str) -> Result<Profile
             out_len,
             in_len,
             report_id,
+            read_matching: sub(request_raw, "read_matching")
+                .map(truthy)
+                .unwrap_or(false),
         },
         response: Response {
+            markers,
+            exact_length,
             min_length: min_length as usize,
             status: StatusRule {
                 offset: status_offset,

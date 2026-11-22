@@ -6,6 +6,7 @@ import TrashIcon from '../icons/TrashIcon.vue';
 import { bandColor, bandOf } from '../../lib/bands';
 import { colorHex } from '../../lib/colors';
 import { cardImageBox } from '../../lib/photoLayout';
+import { rightAngle, rotatedCardImages } from '../../lib/rotatedCardImage';
 import {
   cardChip,
   cardLink,
@@ -98,63 +99,28 @@ const imageBox = computed(() =>
   ),
 );
 
-/** 0/90/180/270 用画布预旋转，避免浏览器先缩放再旋转造成二次重采样发虚。 */
-function rightAngle(deg: number): 0 | 90 | 180 | 270 {
-  const snapped = ((Math.round(deg / 90) * 90) % 360 + 360) % 360;
-  if (Math.abs(deg - Math.round(deg / 90) * 90) > 0.01) return 0;
-  return snapped === 90 || snapped === 180 || snapped === 270 ? snapped : 0;
-}
-
+/** 0/90/180/270 共享原尺寸画布预旋转，避免先缩放再旋转造成二次重采样。 */
 const preRot = computed(() => rightAngle(view.value.rot));
 const rotatedSrc = ref<string | null>(null);
-const rotationCache = new Map<string, string>();
-let rotationToken = 0;
 
 watch(
-  [() => props.image, () => view.value.rot],
-  async ([src, deg]) => {
-    const angle = rightAngle(deg);
-    const token = ++rotationToken;
-    if (!src || angle === 0) {
-      rotatedSrc.value = null;
-      return;
-    }
-    const key = `${angle}|${src}`;
-    const cached = rotationCache.get(key);
-    if (cached) {
-      rotatedSrc.value = cached;
-      return;
-    }
-    try {
-      const img = new Image();
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('rotate: image load failed'));
-        img.src = src;
-      });
-      const sw = img.naturalWidth;
-      const sh = img.naturalHeight;
-      if (!sw || !sh) return;
-      const quarter = angle === 90 || angle === 270;
-      const canvas = document.createElement('canvas');
-      canvas.width = quarter ? sh : sw;
-      canvas.height = quarter ? sw : sh;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate((angle * Math.PI) / 180);
-      ctx.drawImage(img, -sw / 2, -sh / 2);
-      const out = canvas.toDataURL('image/png');
-      if (rotationCache.size > 8) rotationCache.clear();
-      rotationCache.set(key, out);
-      if (token === rotationToken) rotatedSrc.value = out;
-    } catch {
-      if (token === rotationToken) rotatedSrc.value = null;
-    }
+  [() => props.image, preRot],
+  ([src, angle], _previous, onCleanup) => {
+    rotatedSrc.value = null;
+    if (!src || angle === 0) return;
+    const lease = rotatedCardImages.acquire(src, angle);
+    let current = true;
+    onCleanup(() => {
+      current = false;
+      lease.release();
+    });
+    void lease.ready.then((url) => {
+      if (current) rotatedSrc.value = url;
+    }).catch(() => {
+      if (current) rotatedSrc.value = null;
+    });
   },
-  { immediate: true },
+  { immediate: true, flush: 'sync' },
 );
 
 /** 画布尚未产出时先退回 CSS 旋转，避免出现一帧尺寸互换的畸变。 */
@@ -177,12 +143,19 @@ const displayRot = computed(() => (appliedRot.value ? 0 : view.value.rot));
 // 原图尺寸独立预载：预旋转图加载后自然宽高已互换，不能再拿它当布局基准。
 watch(
   () => props.image,
-  (src) => {
+  (src, _previous, onCleanup) => {
     natural.value = { w: 0, h: 0 };
-    rotationCache.clear();
     if (!src) return;
     const probe = new Image();
+    let current = true;
+    onCleanup(() => {
+      current = false;
+      probe.onload = null;
+      probe.onerror = null;
+      probe.src = '';
+    });
     probe.onload = () => {
+      if (!current) return;
       natural.value = { w: probe.naturalWidth, h: probe.naturalHeight };
       void nextTick(fitWm);
     };

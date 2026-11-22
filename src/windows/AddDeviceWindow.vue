@@ -15,6 +15,7 @@ import { useWindowScale } from '../composables/useWindowScale';
 import { isSameDevice } from '../lib/deviceIdentity';
 import { clamp } from '../lib/geometry';
 import * as ipc from '../lib/ipc';
+import { initializeWindow } from '../lib/windowLifecycle';
 import { useConfigStore } from '../stores/config';
 import { useDevicesStore } from '../stores/devices';
 import { useDiscoverStore } from '../stores/discover';
@@ -664,15 +665,12 @@ function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') void hideWindow();
 }
 
-let opened = false;
-
 function onAddOpen(): void {
-  opened = true;
   void enter();
   void runScan();
 }
 
-onMounted(async () => {
+onMounted(() => initializeWindow(async () => {
   window.addEventListener('keydown', onKeydown);
   try {
     unlisten = await listen('add-open', onAddOpen);
@@ -680,13 +678,8 @@ onMounted(async () => {
     /* 浏览器预览/单测没有事件通道，忽略 */
   }
   await Promise.all([config.load(), discover.loadProfiles()]);
-  // 预热门期间不扫 HID；若窗口在监听注册前就被打开，用可见性兜底补一次。
-  try {
-    if (!opened && (await getCurrentWindow().isVisible())) onAddOpen();
-  } catch {
-    /* 非 Tauri 环境没有窗口 API，忽略 */
-  }
-});
+  // 首次扫描由 window_ready 之后的 add-open 触发，避免重复扫描。
+}));
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown);

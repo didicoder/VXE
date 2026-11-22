@@ -28,9 +28,8 @@ pub fn start(app: AppHandle) {
                     .and_then(|window| window.scale_factor().ok())
                     .unwrap_or(1.0);
                 let Some(rect) = window_mgr::tray_bounds(&app, scale) else {
-                    if tooltip_visible {
-                        window_mgr::hide_tooltip(&app);
-                    }
+                    // 也取消尚在冷启动的 show intent，避免鼠标离开后才弹出。
+                    window_mgr::hide_tooltip(&app);
                     inside_since = None;
                     continue;
                 };
@@ -51,13 +50,13 @@ pub fn start(app: AppHandle) {
                     // closing 时重新 show 可取消前端正在播放的离场。
                     if since.elapsed().as_secs_f64() >= delay
                         && (!tooltip_visible || tooltip_closing)
+                        && window_mgr::tooltip_can_show(&app, false, inside)
                     {
                         window_mgr::show_tooltip(&app, false);
                     }
                 } else {
-                    if tooltip_visible {
-                        window_mgr::hide_tooltip(&app);
-                    }
+                    // 也取消尚在冷启动的 show intent，避免鼠标离开后才弹出。
+                    window_mgr::hide_tooltip(&app);
                     inside_since = None;
                 }
             }
@@ -65,7 +64,5 @@ pub fn start(app: AppHandle) {
 }
 
 fn window_visible(app: &AppHandle, label: &str) -> bool {
-    app.get_webview_window(label)
-        .and_then(|window| window.is_visible().ok())
-        .unwrap_or(false)
+    window_mgr::is_window_visible(app, label)
 }

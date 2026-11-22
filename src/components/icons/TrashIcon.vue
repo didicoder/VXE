@@ -6,7 +6,8 @@
  */
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import lottie, { type AnimationItem } from 'lottie-web';
+import type { AnimationItem } from 'lottie-web';
+import lottie from 'lottie-web/build/player/lottie_light';
 import animationData from '../../assets/trash2.json';
 
 const { size = 18, active = false } = defineProps<{

@@ -1,57 +1,81 @@
-/**
- * 实物卡片的每台设备自选图片（文件存 `card-images/{id}.dat`）。
- *
- * 图片本体不进 config.json：卡片组件先读这张表，没有自选图就画电量光环。
- * `set()` 同时把 `card_img: 'custom'` 写进设备配置，作为“已有自选图”的标记。
- */
-
+/** 图片本体只驻留本窗口缓存，不进入 config.json。 */
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import * as ipc from '../lib/ipc'
 import type { DeviceConfig } from '../types/device'
 
 export const useCardImagesStore = defineStore('cardImages', () => {
   const images = ref<Record<string, string>>({})
-  const loading = ref(false)
+  const pendingCount = ref(0)
+  const loading = computed(() => pendingCount.value > 0)
+  const completed = new Set<string>()
+  const versions = new Map<string, symbol>()
+  const reads = new Map<string, Promise<void>>()
+  let devicesById: Map<string, string> | null = null
 
-  /**
-   * 为整份设备列表补齐自选图；读失败的设备按「没有自选图」处理。
-   *
-   * 合并而不是整体替换：刚保存的图会先写进内存、再由 `updateDevice` 触发重读，
-   * 如果这中间任何一次读取失败，整体替换会把用户刚换上的图抹掉（表现为「换图没反应」）。
-   * 真正删除只走 `clear()`。
-   */
-  async function loadAll(devices: readonly DeviceConfig[]): Promise<void> {
-    loading.value = true
-    const entries = await Promise.all(
-      devices.map(async (device) => {
-        try {
-          const data = await ipc.getDeviceCardImage(device.id)
-          return data ? ([device.id, data] as const) : null
-        } catch {
-          return null
-        }
-      }),
-    )
-    const next: Record<string, string> = { ...images.value }
-    for (const entry of entries) {
-      if (entry) next[entry[0]] = entry[1]
-    }
-    images.value = next
-    loading.value = false
+  function invalidate(id: string): void {
+    versions.set(id, Symbol())
+    reads.delete(id)
+    completed.delete(id)
   }
 
-  /** 单台设备重读：来自其它窗口的换图/清图事件。 */
-  async function loadOne(id: string): Promise<void> {
-    try {
-      const data = await ipc.getDeviceCardImage(id)
+  /** 合法设备与当前页面需求分开；没有 card_img 标记的旧图片仍会按需探测。 */
+  function syncDevices(devices: readonly DeviceConfig[]): void {
+    const next = new Map(devices.map(d => [d.id, d.card_img ?? '']))
+    const known = new Set([...versions.keys(), ...Object.keys(images.value)])
+    for (const id of known) {
+      if (!next.has(id)) {
+        invalidate(id)
+        versions.delete(id)
+      }
+    }
+    if (devicesById) {
+      for (const [id, marker] of next) {
+        if (devicesById.has(id) && devicesById.get(id) !== marker) invalidate(id)
+      }
+    }
+    devicesById = next
+    images.value = Object.fromEntries(Object.entries(images.value).filter(([id]) => next.has(id)))
+  }
+
+  function readImage(id: string): Promise<void> {
+    if (devicesById && !devicesById.has(id)) return Promise.resolve()
+    if (completed.has(id)) return Promise.resolve()
+    const pending = reads.get(id)
+    if (pending) return pending
+    const version = versions.get(id) ?? Symbol()
+    versions.set(id, version)
+    pendingCount.value += 1
+    const promise = ipc.getDeviceCardImage(id).then(data => {
+      if (versions.get(id) !== version) return
+      completed.add(id) // 不存在也是完成态；失败则留给下次需求重试。
       const next = { ...images.value }
       if (data) next[id] = data
       else delete next[id]
       images.value = next
-    } catch {
-      // 读失败保留当前内存图，等下一次 loadAll 补齐
-    }
+    }).catch(() => {
+      // 临时读取失败保留刚保存的图片，并允许下次重试。
+    }).finally(() => {
+      pendingCount.value -= 1
+      if (reads.get(id) === promise) reads.delete(id)
+    })
+    reads.set(id, promise)
+    return promise
+  }
+
+  async function ensureImages(ids: readonly string[]): Promise<void> {
+    await Promise.all([...new Set(ids)].map(readImage))
+  }
+
+  /** 兼容需要完整列表的调用；完成态不会重复读取。 */
+  function loadAll(devices: readonly DeviceConfig[]): Promise<void> {
+    syncDevices(devices)
+    return ensureImages(devices.map(d => d.id))
+  }
+
+  function loadOne(id: string): Promise<void> {
+    invalidate(id)
+    return readImage(id)
   }
 
   function imageFor(id: string): string | null {
@@ -60,29 +84,25 @@ export const useCardImagesStore = defineStore('cardImages', () => {
 
   async function save(id: string, dataUrl: string): Promise<void> {
     await ipc.setDeviceCardImage(id, dataUrl)
+    invalidate(id)
+    if (devicesById && !devicesById.has(id)) return
+    completed.add(id)
     images.value = { ...images.value, [id]: dataUrl }
   }
 
-  /**
-   * 从磁盘路径装入（前端不碰 File API / canvas，Rust 侧转 data URL）。
-   * 成功后回读一次，让内存缓存与磁盘一致。
-   */
   async function saveFromPath(id: string, path: string): Promise<void> {
     await ipc.setDeviceCardImageFromPath(id, path)
-    try {
-      const data = await ipc.getDeviceCardImage(id)
-      if (data) images.value = { ...images.value, [id]: data }
-    } catch {
-      // 回读失败不致命：下次 loadAll 会从磁盘补上
-    }
+    await loadOne(id)
   }
 
   async function clear(id: string): Promise<void> {
     await ipc.clearDeviceCardImage(id)
+    invalidate(id)
+    completed.add(id)
     const next = { ...images.value }
     delete next[id]
     images.value = next
   }
 
-  return { images, loading, loadAll, loadOne, imageFor, save, saveFromPath, clear }
+  return { images, loading, syncDevices, ensureImages, invalidate, loadAll, loadOne, imageFor, save, saveFromPath, clear }
 })

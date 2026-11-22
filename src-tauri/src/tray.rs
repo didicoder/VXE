@@ -33,21 +33,22 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             } => {
                 let app = tray.app_handle();
                 // E5：Windows 双击会送两次左键 up，200 ms 内只处理第一次。
-                let should_show = app
-                    .try_state::<crate::commands::AppState>()
-                    .and_then(|state| {
-                        state.last_tray_click.lock().ok().map(|mut last| {
-                            let now = std::time::Instant::now();
-                            let debounce = last.is_some_and(|previous| {
-                                now.duration_since(previous) < Duration::from_millis(200)
-                            });
-                            if !debounce {
-                                *last = Some(now);
-                            }
-                            !debounce
-                        })
-                    })
-                    .unwrap_or(true);
+                let should_show = if let Some(state) = app.try_state::<crate::commands::AppState>()
+                {
+                    let Ok(mut last) = state.last_tray_click.lock() else {
+                        return;
+                    };
+                    let now = std::time::Instant::now();
+                    let debounce = last.is_some_and(|previous| {
+                        now.duration_since(previous) < Duration::from_millis(200)
+                    });
+                    if !debounce {
+                        *last = Some(now);
+                    }
+                    !debounce
+                } else {
+                    true
+                };
                 if should_show {
                     let shown = crate::window_mgr::show_popup(app, false);
                     tray_log(&format!("left-click shown={shown}"));
@@ -79,7 +80,7 @@ fn image(rgba: Vec<u8>) -> tauri::image::Image<'static> {
 }
 
 /// 托盘事件落盘到 exe 同级 `tray.log`，用于诊断“偶发点击无反应”。
-fn tray_log(line: &str) {
+pub(crate) fn tray_log(line: &str) {
     use std::io::Write;
     let path = crate::config::app_dir().join("tray.log");
     if let Ok(meta) = std::fs::metadata(&path)
@@ -271,20 +272,58 @@ pub fn start_blink(app: &AppHandle, seconds: u64) {
 /// Win11: `IsPromoted=0` means the icon lives in the "^" overflow panel; the
 /// shell still reports a phantom rect, so callers must not treat it as hoverable.
 pub fn is_promoted() -> Option<bool> {
-    use winreg::enums::{HKEY_CURRENT_USER, KEY_QUERY_VALUE};
-    let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
-    let exe_text = exe.to_string_lossy().to_ascii_lowercase();
+    // hover 每 80ms 查询；注册表（含未找到）最多每两秒刷新一次。
+    static CACHE: Mutex<Option<(std::time::Instant, Option<bool>)>> = Mutex::new(None);
+    let mut cache = CACHE.lock().ok()?;
+    if let Some((at, value)) = *cache
+        && at.elapsed() < Duration::from_secs(2)
+    {
+        return value;
+    }
+    let value = query_promoted();
+    *cache = Some((std::time::Instant::now(), value));
+    value
+}
+
+fn normalize_executable_path(path: &str) -> String {
+    let path = path
+        .strip_prefix(r"\\?\UNC\")
+        .map(|path| format!(r"\\{path}"))
+        .or_else(|| path.strip_prefix(r"\\?\").map(str::to_owned))
+        .unwrap_or_else(|| path.to_owned());
+    path.to_ascii_lowercase()
+}
+
+fn query_promoted() -> Option<bool> {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_ENUMERATE_SUB_KEYS, KEY_QUERY_VALUE};
+    static EXE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    let exe_text = EXE
+        .get_or_init(|| {
+            let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
+            Some(normalize_executable_path(&exe.to_string_lossy()))
+        })
+        .as_ref()?;
     let root = winreg::RegKey::predef(HKEY_CURRENT_USER)
-        .open_subkey_with_flags(r"Control Panel\NotifyIconSettings", KEY_QUERY_VALUE)
+        .open_subkey_with_flags(
+            r"Control Panel\NotifyIconSettings",
+            KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS,
+        )
         .ok()?;
-    for name in root.enum_keys().flatten() {
-        let Ok(sub) = root.open_subkey(&name) else {
+    for name in root.enum_keys() {
+        let name = match name {
+            Ok(name) => name,
+            Err(error) => {
+                eprintln!("[tray] enumerate NotifyIconSettings failed: {error}");
+                return None;
+            }
+        };
+        let Ok(sub) = root.open_subkey_with_flags(&name, KEY_QUERY_VALUE) else {
             continue;
         };
         let Ok(path) = sub.get_value::<String, _>("ExecutablePath") else {
             continue;
         };
-        if path.to_ascii_lowercase() == exe_text {
+        if normalize_executable_path(&path) == *exe_text {
             return sub.get_value::<u32, _>("IsPromoted").ok().map(|v| v != 0);
         }
     }

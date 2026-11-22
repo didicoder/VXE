@@ -7,8 +7,7 @@
  * 点绿色「保存」胶囊才落盘；其余缩放即时落盘。
  */
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import SettingRow from './SettingRow.vue';
 import ConfigCard from './ConfigCard.vue';
 import FoldSection from './FoldSection.vue';
@@ -58,7 +57,7 @@ const scaleFold = ref(false);
 
 const ALERT_MODE_OPTIONS: { value: string; label: string }[] = [
   { value: 'popup', label: '弹窗提醒' },
-  { value: 'tray', label: '托盘图标提醒' },
+  { value: 'tray', label: '托盘闪烁' },
   { value: 'both', label: '两者同时' },
 ];
 
@@ -408,22 +407,14 @@ function onScroll(): void {
 
 // ---------- 生命周期 ----------
 
-let unlisten: UnlistenFn | null = null;
-
 onMounted(async () => {
   window.addEventListener('pointerdown', onWindowPointerDown, true);
-  await nextTick();
 
-  await Promise.allSettled([config.load(), alerts.loadSoundFiles()]);
+  await alerts.loadSoundFiles();
   try {
     configPath.value = await ipc.getConfigPath();
   } catch {
     configPath.value = '';
-  }
-  try {
-    unlisten = await listen('config-changed', () => { void config.load(); });
-  } catch {
-    // 非 Tauri 环境下没有事件总线
   }
 });
 
@@ -432,8 +423,6 @@ onBeforeUnmount(() => {
   setPopupPreview(false);
   setTipPreview(false);
   setAlertPreview(false);
-  unlisten?.();
-  unlisten = null;
 });
 </script>
 
@@ -541,7 +530,7 @@ onBeforeUnmount(() => {
             :expanded="scaleFold"
             @toggle="scaleFold = !scaleFold"
           >
-            <SettingRow label="主面板缩放" hint="总览 / 设备 / 设置所在主面板的整体缩放，点「保存」生效">
+            <SettingRow label="主面板缩放" hint="1× 为 832×576；总览 / 设备 / 设置共用，点「保存」生效">
               <div class="scale" data-scale-pending>
                 <button
                   v-if="scaleDirty"
@@ -919,6 +908,13 @@ onBeforeUnmount(() => {
   margin-top: 12px;
 }
 
+.settings :deep(.pill--sm) {
+  width: 128px;
+  min-width: 128px;
+  height: 34px;
+  font-size: 15px;
+}
+
 /* 文本框：364×44、r-ctrl、1px 描边、15 body、内缩 12 */
 .field {
   width: 364px;
@@ -1015,6 +1011,8 @@ onBeforeUnmount(() => {
 }
 
 .pos__button {
+  width: 128px;
+  min-width: 128px;
   cursor: pointer;
   transition:
     background var(--speed) var(--ease),

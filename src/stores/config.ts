@@ -71,22 +71,65 @@ export const useConfigStore = defineStore('config', () => {
   const loaded = ref(false)
   const error = ref<string | null>(null)
   let unlisten: UnlistenFn | null = null
+  let startingEvents: Promise<void> | null = null
+  let eventGeneration = 0
+  let writeVersion = 0
+  let reloadVersion = 0
+  let activeWrites = 0
+  let writeWaiters: Array<() => void> = []
+  let loadingPromise: Promise<void> | null = null
 
-  /** 订阅 Rust 配置变更；主题/缩放/设备 CRUD 后所有窗口同步。 */
-  async function startEvents(): Promise<void> {
-    if (unlisten) return
-    try {
-      unlisten = await listen('config-changed', () => {
-        void load()
-      })
-    } catch {
-      // 浏览器预览/单测没有 Tauri 事件通道，忽略即可。
+  function beginWrite(): () => void {
+    activeWrites += 1
+    return () => {
+      writeVersion += 1
+      activeWrites -= 1
+      if (activeWrites === 0) {
+        const waiters = writeWaiters
+        writeWaiters = []
+        waiters.forEach((resolve) => resolve())
+      }
     }
   }
 
+  function waitForWrites(): Promise<void> {
+    if (activeWrites === 0) return Promise.resolve()
+    return new Promise((resolve) => writeWaiters.push(resolve))
+  }
+
+  async function withWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const endWrite = beginWrite()
+    try {
+      return await operation()
+    } finally {
+      endWrite()
+    }
+  }
+
+  /** 订阅 Rust 配置变更；主题/缩放/设备 CRUD 后所有窗口同步。 */
+  function startEvents(): Promise<void> {
+    if (unlisten) return Promise.resolve()
+    if (startingEvents) return startingEvents
+    const generation = ++eventGeneration
+    startingEvents = listen('config-changed', () => {
+      reloadVersion += 1
+      void load()
+    }).then((stop) => {
+      if (generation === eventGeneration) unlisten = stop
+      else stop()
+    }).catch(() => {
+      // 浏览器预览/单测没有 Tauri 事件通道，忽略即可。
+    }).finally(() => {
+      if (generation === eventGeneration) startingEvents = null
+    })
+    return startingEvents
+  }
+
   function stopEvents(): void {
+    eventGeneration += 1
     unlisten?.()
     unlisten = null
+    startingEvents = null
   }
 
   function applySnapshot(snapshot: ConfigSnapshot | null | undefined): void {
@@ -104,27 +147,47 @@ export const useConfigStore = defineStore('config', () => {
   /**
    * 读整份配置。失败时保留当前值（首次失败即默认值），错误写进 `error`。
    */
-  async function load(): Promise<void> {
+  function load(): Promise<void> {
+    if (loadingPromise) return loadingPromise
     loading.value = true
     error.value = null
-    try {
-      applySnapshot(await ipc.getConfig())
-      loaded.value = true
-    } catch (cause) {
-      error.value = ipc.errorMessage(cause)
-    } finally {
-      loading.value = false
-    }
+    loadingPromise = (async () => {
+      try {
+        while (true) {
+          const version = writeVersion
+          const requestedReload = reloadVersion
+          try {
+            const snapshot = await ipc.getConfig()
+            await waitForWrites()
+            if (version !== writeVersion || requestedReload !== reloadVersion) continue
+            applySnapshot(snapshot)
+            loaded.value = true
+            return
+          } catch (cause) {
+            await waitForWrites()
+            if (version !== writeVersion || requestedReload !== reloadVersion) continue
+            error.value = ipc.errorMessage(cause)
+            return
+          }
+        }
+      } finally {
+        loading.value = false
+        loadingPromise = null
+      }
+    })()
+    return loadingPromise
   }
 
   /** 写单个键；成功后本地同步（失败不回滚、由 `error` 暴露）。 */
   async function setSetting(key: string, value: unknown): Promise<void> {
     error.value = null
     try {
-      await ipc.setSetting(key, value)
-      const next = { ...settings.value } as Record<string, unknown>
-      next[key] = value
-      applyLocal(next as Partial<AppSettings>)
+      await withWrite(async () => {
+        await ipc.setSetting(key, value)
+        const next = { ...settings.value } as Record<string, unknown>
+        next[key] = value
+        applyLocal(next as Partial<AppSettings>)
+      })
     } catch (cause) {
       error.value = ipc.errorMessage(cause)
     }
@@ -134,8 +197,10 @@ export const useConfigStore = defineStore('config', () => {
   async function setSettings(patch: Partial<AppSettings>): Promise<void> {
     error.value = null
     try {
-      await ipc.setSettings(patch)
-      applyLocal(patch)
+      await withWrite(async () => {
+        await ipc.setSettings(patch)
+        applyLocal(patch)
+      })
     } catch (cause) {
       error.value = ipc.errorMessage(cause)
     }
@@ -145,7 +210,7 @@ export const useConfigStore = defineStore('config', () => {
   async function addDevice(device: Partial<DeviceConfig>): Promise<DeviceConfig | null> {
     error.value = null
     try {
-      const added = await ipc.addDevice(device)
+      const added = await withWrite(() => ipc.addDevice(device))
       await load()
       return added
     } catch (cause) {
@@ -158,7 +223,7 @@ export const useConfigStore = defineStore('config', () => {
   async function updateDevice(id: string, fields: Partial<DeviceConfig>): Promise<boolean> {
     error.value = null
     try {
-      await ipc.updateDevice(id, fields)
+      await withWrite(() => ipc.updateDevice(id, fields))
       await load()
       return true
     } catch (cause) {
@@ -171,7 +236,7 @@ export const useConfigStore = defineStore('config', () => {
   async function removeDevice(id: string): Promise<boolean> {
     error.value = null
     try {
-      await ipc.removeDevice(id)
+      await withWrite(() => ipc.removeDevice(id))
       await load()
       return true
     } catch (cause) {
@@ -184,6 +249,7 @@ export const useConfigStore = defineStore('config', () => {
   function moveLocal(from: number, to: number): void {
     const list = devices.value
     if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return
+    writeVersion += 1
     const [item] = list.splice(from, 1)
     if (item) list.splice(to, 0, item)
   }
@@ -192,7 +258,7 @@ export const useConfigStore = defineStore('config', () => {
   async function reorderDevices(ids: string[]): Promise<boolean> {
     error.value = null
     try {
-      await ipc.reorderDevices(ids)
+      await withWrite(() => ipc.reorderDevices(ids))
       return true
     } catch (cause) {
       error.value = ipc.errorMessage(cause)

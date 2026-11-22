@@ -8,6 +8,7 @@
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import PillButton from '../PillButton.vue';
 import SegmentedControl from '../SegmentedControl.vue';
 import StepperControl from '../StepperControl.vue';
@@ -15,6 +16,7 @@ import LineIcon from '../icons/LineIcon.vue';
 import wallpaperUrl from '../../assets/wallpaper.jpg';
 import { wallpaperGeometry } from '../../lib/wallpaperLayout';
 import * as ipc from '../../lib/ipc';
+import { trackWindowInitialization } from '../../lib/windowLifecycle';
 
 /** 原图上限 8 MB；超过 MAX_SIDE 的图片在预览/保存时降采样，减轻渲染与内存压力。 */
 const BG_MAX_BYTES = 8 * 1024 * 1024;
@@ -323,23 +325,39 @@ async function save(): Promise<void> {
   }
 }
 
+let closing = false;
+
 async function cancel(): Promise<void> {
-  if (busy.value) return;
+  if (busy.value || closing) return;
+  closing = true;
   try {
-    await ipc.cancelBackgroundPreview();
-  } catch {
-    // 忽略：关窗优先
-  }
-  try {
-    await ipc.hideBackgroundEditor();
-  } catch {
-    // 非 Tauri 环境
+    try {
+      await ipc.cancelBackgroundPreview();
+    } catch {
+      // 忽略：关窗优先
+    }
+    try {
+      await ipc.hideBackgroundEditor();
+    } catch {
+      // 非 Tauri 环境
+    }
+  } finally {
+    closing = false;
   }
 }
 
 let unlisten: UnlistenFn | null = null;
+let unlistenClose: UnlistenFn | null = null;
 
-onMounted(async () => {
+onMounted(() => trackWindowInitialization((async () => {
+  try {
+    unlistenClose = await getCurrentWindow().onCloseRequested(async (event) => {
+      event.preventDefault();
+      await cancel();
+    });
+  } catch {
+    // 浏览器预览没有原生窗口
+  }
   await load();
   try {
     unlisten = await listen('bg-editor-open', () => {
@@ -348,11 +366,13 @@ onMounted(async () => {
   } catch {
     // 非 Tauri 环境没有事件总线
   }
-});
+})()));
 
 onUnmounted(() => {
   unlisten?.();
   unlisten = null;
+  unlistenClose?.();
+  unlistenClose = null;
 });
 </script>
 

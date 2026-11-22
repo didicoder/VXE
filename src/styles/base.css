@@ -40,6 +40,17 @@ button:focus-visible,
   outline-offset: 2px;
 }
 
+/* 原生侧只在隐藏期间添加；恢复可见时移除此类，沿用原动画与过渡。 */
+html.window-inactive,
+html.window-inactive::before,
+html.window-inactive::after,
+html.window-inactive *,
+html.window-inactive *::before,
+html.window-inactive *::after {
+  animation-play-state: paused !important;
+  transition: none !important;
+}
+
 /* 浮层进出：窗口由 Rust show/hide，前端只负责内容帧的淡入/微缩放 */
 .window-enter {
   animation: window-enter var(--dur-enter) var(--ease-out) both;
