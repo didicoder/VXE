@@ -1,6 +1,9 @@
 pub mod bt;
+pub mod decode;
 pub mod hid;
+pub mod legacy_labels;
 pub mod models;
+pub mod passive;
 pub mod profiles;
 pub mod xinput;
 
@@ -139,10 +142,14 @@ pub fn read_all(
     devices: &[DeviceSpec],
     profile_dirs: &[PathBuf],
     error_log_dir: Option<&std::path::Path>,
+    passive: Option<&passive::Hub>,
 ) -> Vec<DeviceStatus> {
     let (table, errors) = profiles::load(profile_dirs);
     if let Some(dir) = error_log_dir {
         profiles::log_errors(dir, &errors);
+    }
+    if let Some(hub) = passive {
+        hub.sync(devices, &table);
     }
     // 蓝牙枚举一次即可覆盖所有蓝牙设备；旧实现每台都重新枚举一遍。
     let audio_levels: HashMap<String, u8> = if devices.iter().any(is_audio) {
@@ -160,7 +167,7 @@ pub fn read_all(
             .map(|dev| {
                 let table = &table;
                 let audio = &audio_levels;
-                scope.spawn(move || read_one(dev, table, audio))
+                scope.spawn(move || read_one(dev, table, audio, passive))
             })
             .collect();
         handles
@@ -199,6 +206,7 @@ fn read_one(
     dev: &DeviceSpec,
     table: &HashMap<String, profiles::Profile>,
     audio_levels: &HashMap<String, u8>,
+    passive: Option<&passive::Hub>,
 ) -> ReadResult {
     if is_audio(dev) {
         return match audio_levels.get(&bt::normalize_addr(&dev.bt_addr)).copied() {
@@ -236,5 +244,10 @@ fn read_one(
             charging: false,
         };
     };
+    if profile.request.transport == profiles::Transport::Passive
+        && let Some(hub) = passive
+    {
+        return hub.read(dev, profile);
+    }
     hid::read_by_profile(dev, profile)
 }

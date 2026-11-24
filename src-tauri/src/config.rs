@@ -66,6 +66,7 @@ pub static DEFAULTS: LazyLock<Map<String, Value>> = LazyLock::new(|| {
         "tray_blink_seconds": 10,
         "tray_level_mode": "average",
         "tray_level_device": "",
+        "tray_icon_style": "bolt",
         "alert_base": 1.0,
         "alert_scale": 1.0,
         "alert_sound": true,
@@ -390,6 +391,103 @@ impl Store {
         Ok(removed)
     }
 
+    /// 2026-11-24：把旧内置显示名一次性迁到中文名。
+    ///
+    /// 只替换与旧内置名完全相同的 label；用户自定义名、照片卡文案、
+    /// 墓碑键和 last_levels 全部不动。空 label / 等于 id 的占位补成唯一可识别的名称。
+    pub fn migrate_device_labels(&mut self) -> Result<bool, StoreError> {
+        const VERSION_KEY: &str = "label_migration_v1";
+        const VERSION: &str = "2026-11-24";
+        if self.data.get(VERSION_KEY).and_then(Value::as_str) == Some(VERSION) {
+            return Ok(false);
+        }
+        let mut changes: Vec<(String, String, String)> = Vec::new();
+        let catalog = crate::battery::models::load(&std::collections::HashMap::new());
+        if let Some(Value::Array(items)) = self.data.get_mut("devices") {
+            for dev in items.iter_mut() {
+                let Some(obj) = dev.as_object_mut() else {
+                    continue;
+                };
+                if obj
+                    .get("bt_addr")
+                    .and_then(Value::as_str)
+                    .is_some_and(|addr| !addr.trim().is_empty())
+                {
+                    continue;
+                }
+                let profile = obj
+                    .get("profile")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                if profile.eq_ignore_ascii_case("xinput") {
+                    continue;
+                }
+                let model = obj
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                let id = obj
+                    .get("id")
+                    .or_else(|| obj.get("key"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                let old = obj
+                    .get("label")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                let target = if old.is_empty() || old == id {
+                    placeholder_label(&catalog, &model, &profile)
+                } else {
+                    legacy_label(&catalog, &model, &profile, &old)
+                };
+                let Some(new) = target else {
+                    continue;
+                };
+                if new == old {
+                    continue;
+                }
+                obj.insert("label".to_owned(), Value::String(new.clone()));
+                changes.push((if id.is_empty() { "?".to_owned() } else { id }, old, new));
+            }
+        }
+        self.data
+            .insert(VERSION_KEY.to_owned(), Value::String(VERSION.to_owned()));
+        if changes.is_empty() {
+            self.save()?;
+            return Ok(false);
+        }
+        if self.path.exists() {
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_millis())
+                .unwrap_or(0);
+            let backup = self.path.with_file_name(format!("config.json.bak-{stamp}"));
+            fs::copy(&self.path, &backup).map_err(|source| StoreError::Write {
+                path: backup,
+                source,
+            })?;
+        }
+        self.save()?;
+        if let Some(parent) = self.path.parent() {
+            let log = parent.join("config-migration.log");
+            if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(log) {
+                use std::io::Write as _;
+                for (id, old, new) in &changes {
+                    let _ = writeln!(file, "label: {id} \"{old}\" -> \"{new}\"");
+                }
+            }
+        }
+        Ok(true)
+    }
+
     // ---------- 夹取 getter（UI 只从这里取值） ----------
 
     /// 旧安装基准（仅旧配置迁移/兼容读取，不参与新窗口尺寸）。
@@ -483,6 +581,15 @@ impl Store {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string()
+    }
+
+    /// 托盘图标样式：`bolt` / `ring` / `battery`，脏值回落闪电。
+    pub fn tray_icon_style(&self) -> &'static str {
+        match self.get("tray_icon_style").and_then(Value::as_str) {
+            Some("ring") => "ring",
+            Some("battery") => "battery",
+            _ => "bolt",
+        }
     }
 
     /// 刷新间隔（秒）。V16 只在 UI 步进处夹取，这里作为唯一入口统一夹取。
@@ -844,6 +951,56 @@ impl Store {
     }
 }
 
+/// 旧内置名 → 中文名；型号映射优先于协议映射。
+fn legacy_label(
+    catalog: &std::collections::HashMap<String, crate::battery::models::Model>,
+    model: &str,
+    profile: &str,
+    old: &str,
+) -> Option<String> {
+    use crate::battery::legacy_labels;
+    if !model.is_empty() {
+        for &(id, before, after) in legacy_labels::MODEL_LABELS {
+            if id.eq_ignore_ascii_case(model) && before == old {
+                return Some(after.to_owned());
+            }
+        }
+    }
+    if !profile.is_empty() {
+        for &(id, before, after) in legacy_labels::PROFILE_LABELS {
+            if id.eq_ignore_ascii_case(profile) && before == old {
+                return Some(match catalog.get(model) {
+                    Some(entry) => entry.label.clone(),
+                    None => after.to_owned(),
+                });
+            }
+        }
+    }
+    None
+}
+
+/// 空 label / label==id 的占位只在能唯一认出型号或协议时补名。
+fn placeholder_label(
+    catalog: &std::collections::HashMap<String, crate::battery::models::Model>,
+    model: &str,
+    profile: &str,
+) -> Option<String> {
+    catalog
+        .get(model)
+        .map(|entry| entry.label.clone())
+        .or_else(|| profile_label(profile))
+}
+
+fn profile_label(profile: &str) -> Option<String> {
+    if profile.is_empty() {
+        return None;
+    }
+    crate::battery::legacy_labels::PROFILE_LABELS
+        .iter()
+        .find(|(id, _, _)| id.eq_ignore_ascii_case(profile))
+        .map(|(_, _, after)| (*after).to_owned())
+}
+
 /// 设备的硬件墓碑键：蓝牙用 `bt:ADDR`，XInput 用 `xinput:N`，HID 用 `VID:PID`。
 pub fn hardware_key_of(dev: &Value) -> String {
     let bt = text_or_empty(dev.get("bt_addr")).trim().to_uppercase();
@@ -1088,4 +1245,96 @@ fn with_tmp_suffix(path: &Path) -> PathBuf {
     let mut name = path.as_os_str().to_owned();
     name.push(".tmp");
     PathBuf::from(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn temp_config(name: &str) -> PathBuf {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|value| value.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("vxe-{name}-{stamp}"));
+        fs::create_dir_all(&dir).unwrap();
+        dir.join("config.json")
+    }
+
+    #[test]
+    fn migrates_legacy_labels_once() {
+        let path = temp_config("labels");
+        fs::write(
+            &path,
+            serde_json::to_string_pretty(&json!({
+                "devices": [
+                    {
+                        "id": "d1",
+                        "label": "ATK A9 Air 大师+ / CompX 鼠标",
+                        "profile": "atk-a9-air",
+                        "model": "atk-a9-air"
+                    },
+                    {
+                        "id": "d2",
+                        "label": "我的鼠标",
+                        "profile": "atk-a9-air",
+                        "model": "atk-a9-air"
+                    },
+                    {
+                        "id": "d3",
+                        "label": "ATK A9 Air 大师+ / CompX 鼠标",
+                        "profile": "atk-a9-air",
+                        "bt_addr": "AA:BB:CC:DD:EE:FF"
+                    },
+                    {
+                        "id": "d4",
+                        "label": "",
+                        "profile": "atk-f1-family",
+                        "model": "atk-f1-ultimate"
+                    }
+                ],
+                "card_order": ["d1"]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let mut store = Store::load_at(&path);
+        assert!(store.migrate_device_labels().unwrap());
+        let saved: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        let devices = saved["devices"].as_array().unwrap();
+        assert_eq!(devices[0]["label"], "艾泰克 ATK A9 Air 大师+ 鼠标");
+        assert_eq!(devices[1]["label"], "我的鼠标");
+        assert_eq!(devices[2]["label"], "ATK A9 Air 大师+ / CompX 鼠标");
+        assert_eq!(devices[3]["label"], "艾泰克 ATK F1 Ultimate 鼠标");
+        assert_eq!(saved["card_order"], json!(["d1"]));
+        assert!(path.with_file_name("config-migration.log").exists());
+        let dir = path.parent().unwrap().to_path_buf();
+        let backups = fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("config.json.bak-")
+            })
+            .count();
+        assert_eq!(backups, 1);
+
+        assert!(!store.migrate_device_labels().unwrap());
+        let backups_after = fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("config.json.bak-")
+            })
+            .count();
+        assert_eq!(backups_after, 1);
+        fs::remove_dir_all(dir).unwrap();
+    }
 }

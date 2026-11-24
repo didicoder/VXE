@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Component } from 'vue';
 import MenuToggleIcon from './icons/MenuToggleIcon.vue';
 
 interface SegmentedOption {
@@ -6,6 +7,9 @@ interface SegmentedOption {
   label: string;
   /** 带收纳图标的选项：图标与文字同在一个胶囊内，点图标只发 toggle-expand。 */
   expandable?: boolean;
+  /** 可选的前置预览组件（托盘样式等），不影响纯文本选项。 */
+  preview?: Component;
+  previewProps?: Record<string, unknown>;
 }
 
 const {
@@ -57,6 +61,12 @@ function select(value: string) {
       >
         <MenuToggleIcon :size="14" :active="expanded === option.value" />
       </button>
+      <component
+        :is="option.preview"
+        v-if="option.preview"
+        v-bind="option.previewProps"
+        class="segmented__preview"
+      />
       <span>{{ option.label }}</span>
     </div>
   </div>
@@ -81,7 +91,7 @@ function select(value: string) {
   flex: 1;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
   padding: 0;
   border: 1px solid transparent;
@@ -120,6 +130,13 @@ function select(value: string) {
 
 .segmented__expander:hover {
   color: var(--ink);
+}
+
+.segmented__preview {
+  display: block;
+  flex: none;
+  width: 24px;
+  height: 24px;
 }
 
 .segmented__item--active {

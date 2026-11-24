@@ -33,6 +33,9 @@ type AlertMode = 'popup' | 'tray' | 'both'
 /** 托盘闪电图标的电量来源（`tray_level_mode`）。 */
 export type TrayLevelMode = 'average' | 'device' | 'min'
 
+/** 托盘图标样式（`tray_icon_style`）。 */
+export type TrayIconStyle = 'bolt' | 'ring' | 'battery'
+
 /** 提醒弹窗自定义位置：物理像素中心点，null = 默认底部居中。 */
 type AlertPosition = [number, number] | null
 
@@ -81,6 +84,8 @@ export interface AppSettings {
   tray_blink_seconds: number
   /** 托盘闪电图标的电量来源：设备平均值 / 自选设备 / 最低电量。 */
   tray_level_mode: TrayLevelMode
+  /** 托盘图标样式：闪电 / 圆环 / 电池。 */
+  tray_icon_style: TrayIconStyle
   /** 自选设备 id；空串 = 尚未选择。 */
   tray_level_device: string
   alert_base: number
@@ -144,6 +149,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   alert_mode: 'tray',
   tray_blink_seconds: 10,
   tray_level_mode: 'average',
+  tray_icon_style: 'bolt',
   tray_level_device: '',
   alert_base: 1.0,
   alert_scale: 1.0,

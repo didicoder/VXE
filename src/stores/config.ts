@@ -34,6 +34,10 @@ function mergeSettings(raw: Partial<AppSettings> | null | undefined): AppSetting
       : 'average'
   merged.tray_level_device =
     typeof raw.tray_level_device === 'string' ? raw.tray_level_device : ''
+  merged.tray_icon_style =
+    raw.tray_icon_style === 'ring' || raw.tray_icon_style === 'battery'
+      ? raw.tray_icon_style
+      : 'bolt'
   return merged
 }
 

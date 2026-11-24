@@ -79,34 +79,59 @@ pub fn choice(model: &Model) -> ModelChoice {
 /// 显式拆分的型号。未列出的协议自动生成同 id 型号。
 const MODELS_JSON: &str = r#"{
   "rainy75-keyboard": {
-    "label": "Rainy 75 键盘",
-    "vendor": "WOB / Rainy75",
+    "label": "WOB Rainy 75 键盘",
+    "vendor": "WOB",
     "icon": "keyboard",
     "link": "2.4G",
     "profile": "rainy75-keyboard",
-    "known_ids": [{"vid": "320F", "pid": "5088", "wired_pid": ""}],
-    "products": ["RAINY 75", "RAINY75"],
+    "known_ids": [
+      {
+        "vid": "320F",
+        "pid": "5088",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "RAINY 75",
+      "RAINY75"
+    ],
     "keywords": "Rainy 75 WOB"
   },
   "vxe-r1": {
-    "label": "VXE R1 鼠标",
-    "vendor": "VXE",
+    "label": "威界 VXE R1 鼠标",
+    "vendor": "威界 VXE",
     "icon": "mouse",
     "link": "2.4G",
     "profile": "vxe-v3-nk",
-    "known_ids": [{"vid": "373B", "pid": "10C9", "wired_pid": "10C7"}],
-    "products": ["R1"],
-    "keywords": "R1 Nearlink 星闪 蜻蜓"
+    "known_ids": [
+      {
+        "vid": "373B",
+        "pid": "10C9",
+        "wired_pid": "10C7"
+      }
+    ],
+    "products": [
+      "R1"
+    ],
+    "keywords": "R1 Nearlink 星闪 蜻蜓 VXE"
   },
   "vxe-v3-nk-mouse": {
-    "label": "VXE V3 NK 鼠标",
-    "vendor": "VXE",
+    "label": "威界 VXE V3 NK 鼠标",
+    "vendor": "威界 VXE",
     "icon": "mouse",
     "link": "2.4G",
     "profile": "vxe-v3-nk",
-    "known_ids": [{"vid": "373B", "pid": "10C9", "wired_pid": "10C7"}],
-    "products": ["V3"],
-    "keywords": "V3 NK 蜻蜓 Dragonfly"
+    "known_ids": [
+      {
+        "vid": "373B",
+        "pid": "10C9",
+        "wired_pid": "10C7"
+      }
+    ],
+    "products": [
+      "V3"
+    ],
+    "keywords": "V3 NK 蜻蜓 Dragonfly VXE"
   },
   "mchose-g75-pro": {
     "label": "迈丛 G75 Pro 键盘",
@@ -114,9 +139,22 @@ const MODELS_JSON: &str = r#"{
     "icon": "keyboard",
     "link": "2.4G",
     "profile": "mchose-kb",
-    "known_ids": [{"vid": "3554", "pid": "FA09", "wired_pid": ""}, {"vid": "258A", "pid": "01BB", "wired_pid": ""}],
-    "products": ["G75 PRO"],
-    "keywords": "G75 Pro"
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "FA09",
+        "wired_pid": ""
+      },
+      {
+        "vid": "258A",
+        "pid": "01BB",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "G75 PRO"
+    ],
+    "keywords": "G75 Pro 迈丛"
   },
   "mchose-z75s": {
     "label": "迈丛 Z75S 键盘",
@@ -124,9 +162,22 @@ const MODELS_JSON: &str = r#"{
     "icon": "keyboard",
     "link": "2.4G",
     "profile": "mchose-kb",
-    "known_ids": [{"vid": "3554", "pid": "FA09", "wired_pid": ""}, {"vid": "258A", "pid": "01BB", "wired_pid": ""}],
-    "products": ["Z75S"],
-    "keywords": "Z75S"
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "FA09",
+        "wired_pid": ""
+      },
+      {
+        "vid": "258A",
+        "pid": "01BB",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "Z75S"
+    ],
+    "keywords": "Z75S 迈丛"
   },
   "mchose-k99": {
     "label": "迈丛 K99 键盘",
@@ -134,9 +185,22 @@ const MODELS_JSON: &str = r#"{
     "icon": "keyboard",
     "link": "2.4G",
     "profile": "mchose-kb",
-    "known_ids": [{"vid": "3554", "pid": "FA09", "wired_pid": ""}, {"vid": "258A", "pid": "01BB", "wired_pid": ""}],
-    "products": ["K99"],
-    "keywords": "K99"
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "FA09",
+        "wired_pid": ""
+      },
+      {
+        "vid": "258A",
+        "pid": "01BB",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "K99"
+    ],
+    "keywords": "K99 迈丛"
   },
   "mchose-gx87": {
     "label": "迈丛 GX87 键盘",
@@ -144,9 +208,22 @@ const MODELS_JSON: &str = r#"{
     "icon": "keyboard",
     "link": "2.4G",
     "profile": "mchose-kb",
-    "known_ids": [{"vid": "3554", "pid": "FA09", "wired_pid": ""}, {"vid": "258A", "pid": "01BB", "wired_pid": ""}],
-    "products": ["GX87"],
-    "keywords": "GX87"
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "FA09",
+        "wired_pid": ""
+      },
+      {
+        "vid": "258A",
+        "pid": "01BB",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "GX87"
+    ],
+    "keywords": "GX87 迈丛"
   },
   "mchose-g75": {
     "label": "迈丛 G75 键盘",
@@ -154,49 +231,94 @@ const MODELS_JSON: &str = r#"{
     "icon": "keyboard",
     "link": "2.4G",
     "profile": "mchose-kb",
-    "known_ids": [{"vid": "3554", "pid": "FA09", "wired_pid": ""}, {"vid": "258A", "pid": "01BB", "wired_pid": ""}],
-    "products": ["G75"],
-    "keywords": "G75"
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "FA09",
+        "wired_pid": ""
+      },
+      {
+        "vid": "258A",
+        "pid": "01BB",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "G75"
+    ],
+    "keywords": "G75 迈丛"
   },
   "leobog-hi75c-pro": {
-    "label": "LEOBOG Hi75c Pro 键盘",
-    "vendor": "LEOBOG",
+    "label": "莱奥伯格 LEOBOG Hi75c Pro 键盘",
+    "vendor": "莱奥伯格 LEOBOG",
     "icon": "keyboard",
     "link": "2.4G",
     "profile": "leobog-hi75c",
-    "known_ids": [{"vid": "3554", "pid": "FA09", "wired_pid": ""}],
-    "products": ["HI75C"],
-    "keywords": "Hi75c Pro"
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "FA09",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "HI75C"
+    ],
+    "keywords": "Hi75c Pro LEOBOG"
   },
   "leobog-hi98-pro": {
-    "label": "LEOBOG HI98PRO 键盘",
-    "vendor": "LEOBOG",
+    "label": "莱奥伯格 LEOBOG HI98PRO 键盘",
+    "vendor": "莱奥伯格 LEOBOG",
     "icon": "keyboard",
     "link": "2.4G",
     "profile": "leobog-hi75c",
-    "known_ids": [{"vid": "3554", "pid": "FA09", "wired_pid": ""}],
-    "products": ["HI98"],
-    "keywords": "HI98PRO"
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "FA09",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "HI98"
+    ],
+    "keywords": "HI98PRO LEOBOG"
   },
   "vxe-r1-pro-max": {
-    "label": "VXE R1 Pro Max 鼠标",
-    "vendor": "VXE",
+    "label": "威界 VXE R1 Pro Max 鼠标",
+    "vendor": "威界 VXE",
     "icon": "mouse",
     "link": "2.4G",
     "profile": "vxe-r1-family",
-    "known_ids": [{"vid": "3554", "pid": "F58A", "wired_pid": "F58C"}],
-    "products": ["R1 PRO MAX"],
-    "keywords": "R1 Pro Max"
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "F58A",
+        "wired_pid": "F58C"
+      }
+    ],
+    "products": [
+      "R1 PRO MAX"
+    ],
+    "keywords": "R1 Pro Max VXE"
   },
   "vxe-r1-se-plus": {
-    "label": "VXE R1 SE+ 鼠标",
-    "vendor": "VXE",
+    "label": "威界 VXE R1 SE+ 鼠标",
+    "vendor": "威界 VXE",
     "icon": "mouse",
     "link": "2.4G",
     "profile": "vxe-r1-family",
-    "known_ids": [{"vid": "3554", "pid": "F58E", "wired_pid": "F58F"}],
-    "products": ["R1 SE"],
-    "keywords": "R1 SE+"
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "F58E",
+        "wired_pid": "F58F"
+      }
+    ],
+    "products": [
+      "R1 SE"
+    ],
+    "keywords": "R1 SE+ VXE"
   },
   "vgn-dragonfly3-pro-max": {
     "label": "VGN 蜻蜓 3 Pro Max 鼠标",
@@ -204,9 +326,42 @@ const MODELS_JSON: &str = r#"{
     "icon": "mouse",
     "link": "2.4G",
     "profile": "vgn-ryms",
-    "known_ids": [{"vid": "391D", "pid": "1A04", "wired_pid": ""}, {"vid": "391D", "pid": "1A08", "wired_pid": ""}, {"vid": "391D", "pid": "1A13", "wired_pid": ""}, {"vid": "391D", "pid": "1A25", "wired_pid": ""}, {"vid": "391D", "pid": "1A2B", "wired_pid": ""}, {"vid": "391D", "pid": "1A41", "wired_pid": ""}],
-    "products": ["3 PRO MAX"],
-    "keywords": "蜻蜓 3 Pro Max"
+    "known_ids": [
+      {
+        "vid": "391D",
+        "pid": "1A04",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A08",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A13",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A25",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A2B",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A41",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "3 PRO MAX"
+    ],
+    "keywords": "蜻蜓 3 Pro Max VGN"
   },
   "vgn-y2-v2-pro-max": {
     "label": "VGN Y2 V2 Pro Max 鼠标",
@@ -214,9 +369,42 @@ const MODELS_JSON: &str = r#"{
     "icon": "mouse",
     "link": "2.4G",
     "profile": "vgn-ryms",
-    "known_ids": [{"vid": "391D", "pid": "1A04", "wired_pid": ""}, {"vid": "391D", "pid": "1A08", "wired_pid": ""}, {"vid": "391D", "pid": "1A13", "wired_pid": ""}, {"vid": "391D", "pid": "1A25", "wired_pid": ""}, {"vid": "391D", "pid": "1A2B", "wired_pid": ""}, {"vid": "391D", "pid": "1A41", "wired_pid": ""}],
-    "products": ["Y2 V2"],
-    "keywords": "Y2 V2 Pro Max"
+    "known_ids": [
+      {
+        "vid": "391D",
+        "pid": "1A04",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A08",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A13",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A25",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A2B",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A41",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "Y2 V2"
+    ],
+    "keywords": "Y2 V2 Pro Max VGN"
   },
   "vgn-f1-v2-pro-max": {
     "label": "VGN F1 V2 Pro Max 鼠标",
@@ -224,9 +412,42 @@ const MODELS_JSON: &str = r#"{
     "icon": "mouse",
     "link": "2.4G",
     "profile": "vgn-ryms",
-    "known_ids": [{"vid": "391D", "pid": "1A04", "wired_pid": ""}, {"vid": "391D", "pid": "1A08", "wired_pid": ""}, {"vid": "391D", "pid": "1A13", "wired_pid": ""}, {"vid": "391D", "pid": "1A25", "wired_pid": ""}, {"vid": "391D", "pid": "1A2B", "wired_pid": ""}, {"vid": "391D", "pid": "1A41", "wired_pid": ""}],
-    "products": ["F1 V2"],
-    "keywords": "F1 V2 Pro Max"
+    "known_ids": [
+      {
+        "vid": "391D",
+        "pid": "1A04",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A08",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A13",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A25",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A2B",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A41",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "F1 V2"
+    ],
+    "keywords": "F1 V2 Pro Max VGN"
   },
   "vgn-dragonfly3-ultra": {
     "label": "VGN 蜻蜓 3 Ultra 鼠标",
@@ -234,9 +455,42 @@ const MODELS_JSON: &str = r#"{
     "icon": "mouse",
     "link": "2.4G",
     "profile": "vgn-ryms",
-    "known_ids": [{"vid": "391D", "pid": "1A04", "wired_pid": ""}, {"vid": "391D", "pid": "1A08", "wired_pid": ""}, {"vid": "391D", "pid": "1A13", "wired_pid": ""}, {"vid": "391D", "pid": "1A25", "wired_pid": ""}, {"vid": "391D", "pid": "1A2B", "wired_pid": ""}, {"vid": "391D", "pid": "1A41", "wired_pid": ""}],
-    "products": ["3 ULTRA"],
-    "keywords": "蜻蜓 3 Ultra"
+    "known_ids": [
+      {
+        "vid": "391D",
+        "pid": "1A04",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A08",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A13",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A25",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A2B",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A41",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "3 ULTRA"
+    ],
+    "keywords": "蜻蜓 3 Ultra VGN"
   },
   "vgn-f1-v5-ultra": {
     "label": "VGN F1 V5 Ultra 鼠标",
@@ -244,9 +498,42 @@ const MODELS_JSON: &str = r#"{
     "icon": "mouse",
     "link": "2.4G",
     "profile": "vgn-ryms",
-    "known_ids": [{"vid": "391D", "pid": "1A04", "wired_pid": ""}, {"vid": "391D", "pid": "1A08", "wired_pid": ""}, {"vid": "391D", "pid": "1A13", "wired_pid": ""}, {"vid": "391D", "pid": "1A25", "wired_pid": ""}, {"vid": "391D", "pid": "1A2B", "wired_pid": ""}, {"vid": "391D", "pid": "1A41", "wired_pid": ""}],
-    "products": ["F1 V5"],
-    "keywords": "F1 V5 Ultra"
+    "known_ids": [
+      {
+        "vid": "391D",
+        "pid": "1A04",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A08",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A13",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A25",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A2B",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A41",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "F1 V5"
+    ],
+    "keywords": "F1 V5 Ultra VGN"
   },
   "vgn-f2-v2-ultra": {
     "label": "VGN F2 V2 Ultra 鼠标",
@@ -254,39 +541,206 @@ const MODELS_JSON: &str = r#"{
     "icon": "mouse",
     "link": "2.4G",
     "profile": "vgn-ryms",
-    "known_ids": [{"vid": "391D", "pid": "1A04", "wired_pid": ""}, {"vid": "391D", "pid": "1A08", "wired_pid": ""}, {"vid": "391D", "pid": "1A13", "wired_pid": ""}, {"vid": "391D", "pid": "1A25", "wired_pid": ""}, {"vid": "391D", "pid": "1A2B", "wired_pid": ""}, {"vid": "391D", "pid": "1A41", "wired_pid": ""}],
-    "products": ["F2 V2"],
-    "keywords": "F2 V2 Ultra"
+    "known_ids": [
+      {
+        "vid": "391D",
+        "pid": "1A04",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A08",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A13",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A25",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A2B",
+        "wired_pid": ""
+      },
+      {
+        "vid": "391D",
+        "pid": "1A41",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "F2 V2"
+    ],
+    "keywords": "F2 V2 Ultra VGN"
   },
   "atk-f1-pro-max": {
-    "label": "ATK F1 Pro Max 鼠标",
-    "vendor": "ATK",
+    "label": "艾泰克 ATK F1 Pro Max 鼠标",
+    "vendor": "艾泰克 ATK",
     "icon": "mouse",
     "link": "2.4G",
     "profile": "atk-f1-family",
-    "known_ids": [{"vid": "373B", "pid": "101B", "wired_pid": ""}, {"vid": "373B", "pid": "101A", "wired_pid": ""}, {"vid": "373B", "pid": "1015", "wired_pid": ""}, {"vid": "373B", "pid": "1303", "wired_pid": ""}, {"vid": "373B", "pid": "12A9", "wired_pid": ""}, {"vid": "373B", "pid": "11D9", "wired_pid": ""}, {"vid": "373B", "pid": "11E4", "wired_pid": ""}, {"vid": "373B", "pid": "1085", "wired_pid": ""}],
-    "products": ["F1 PRO MAX"],
-    "keywords": "F1 Pro Max"
+    "known_ids": [
+      {
+        "vid": "373B",
+        "pid": "101B",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "101A",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "1015",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "1303",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "12A9",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "11D9",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "11E4",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "1085",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "F1 PRO MAX"
+    ],
+    "keywords": "F1 Pro Max ATK"
   },
   "atk-f1-v3": {
-    "label": "ATK F1 V3 鼠标",
-    "vendor": "ATK",
+    "label": "艾泰克 ATK F1 V3 鼠标",
+    "vendor": "艾泰克 ATK",
     "icon": "mouse",
     "link": "2.4G",
     "profile": "atk-f1-family",
-    "known_ids": [{"vid": "373B", "pid": "101B", "wired_pid": ""}, {"vid": "373B", "pid": "101A", "wired_pid": ""}, {"vid": "373B", "pid": "1015", "wired_pid": ""}, {"vid": "373B", "pid": "1303", "wired_pid": ""}, {"vid": "373B", "pid": "12A9", "wired_pid": ""}, {"vid": "373B", "pid": "11D9", "wired_pid": ""}, {"vid": "373B", "pid": "11E4", "wired_pid": ""}, {"vid": "373B", "pid": "1085", "wired_pid": ""}],
-    "products": ["F1 V3"],
-    "keywords": "F1 V3"
+    "known_ids": [
+      {
+        "vid": "373B",
+        "pid": "101B",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "101A",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "1015",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "1303",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "12A9",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "11D9",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "11E4",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "1085",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "F1 V3"
+    ],
+    "keywords": "F1 V3 ATK"
   },
   "atk-f1-ultimate": {
-    "label": "ATK F1 Ultimate 鼠标",
-    "vendor": "ATK",
+    "label": "艾泰克 ATK F1 Ultimate 鼠标",
+    "vendor": "艾泰克 ATK",
     "icon": "mouse",
     "link": "2.4G",
     "profile": "atk-f1-family",
-    "known_ids": [{"vid": "373B", "pid": "101B", "wired_pid": ""}, {"vid": "373B", "pid": "101A", "wired_pid": ""}, {"vid": "373B", "pid": "1015", "wired_pid": ""}, {"vid": "373B", "pid": "1303", "wired_pid": ""}, {"vid": "373B", "pid": "12A9", "wired_pid": ""}, {"vid": "373B", "pid": "11D9", "wired_pid": ""}, {"vid": "373B", "pid": "11E4", "wired_pid": ""}, {"vid": "373B", "pid": "1085", "wired_pid": ""}],
-    "products": ["F1 ULTIMATE"],
-    "keywords": "F1 Ultimate"
+    "known_ids": [
+      {
+        "vid": "373B",
+        "pid": "101B",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "101A",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "1015",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "1303",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "12A9",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "11D9",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "11E4",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "1085",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "1031",
+        "wired_pid": "102E"
+      }
+    ],
+    "products": [
+      "F1 ULTIMATE"
+    ],
+    "keywords": "F1 Ultimate ATK"
   },
   "asus-rog-omni-harpe": {
     "label": "华硕 ROG HARPE 鼠标",
@@ -294,9 +748,17 @@ const MODELS_JSON: &str = r#"{
     "icon": "mouse",
     "link": "2.4G",
     "profile": "asus-rog-omni-mouse",
-    "known_ids": [{"vid": "0B05", "pid": "1ACE", "wired_pid": ""}],
-    "products": ["HARPE"],
-    "keywords": "HARPE Omni"
+    "known_ids": [
+      {
+        "vid": "0B05",
+        "pid": "1ACE",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "HARPE"
+    ],
+    "keywords": "HARPE Omni 华硕 ROG"
   },
   "asus-rog-omni-keris": {
     "label": "华硕 ROG KERIS 鼠标",
@@ -304,49 +766,144 @@ const MODELS_JSON: &str = r#"{
     "icon": "mouse",
     "link": "2.4G",
     "profile": "asus-rog-omni-mouse",
-    "known_ids": [{"vid": "0B05", "pid": "1ACE", "wired_pid": ""}],
-    "products": ["KERIS"],
-    "keywords": "KERIS Omni"
+    "known_ids": [
+      {
+        "vid": "0B05",
+        "pid": "1ACE",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "KERIS"
+    ],
+    "keywords": "KERIS Omni 华硕 ROG"
   },
   "hyperx-cloud3": {
-    "label": "HyperX Cloud III Wireless",
-    "vendor": "HyperX",
+    "label": "极度未知 HyperX Cloud III Wireless 耳机",
+    "vendor": "极度未知 HyperX",
     "icon": "headset",
     "link": "2.4G",
     "profile": "hyperx-cloud3-wireless",
-    "known_ids": [{"vid": "03F0", "pid": "05B7", "wired_pid": ""}, {"vid": "03F0", "pid": "0C9D", "wired_pid": ""}, {"vid": "03F0", "pid": "0FCC", "wired_pid": ""}],
-    "products": ["CLOUD III"],
-    "keywords": "Cloud III"
+    "known_ids": [
+      {
+        "vid": "03F0",
+        "pid": "05B7",
+        "wired_pid": ""
+      },
+      {
+        "vid": "03F0",
+        "pid": "0C9D",
+        "wired_pid": ""
+      },
+      {
+        "vid": "03F0",
+        "pid": "0FCC",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "CLOUD III"
+    ],
+    "keywords": "Cloud III HyperX Wireless"
   },
   "hyperx-cloud2-core": {
-    "label": "HyperX Cloud II Core Wireless",
-    "vendor": "HyperX",
+    "label": "极度未知 HyperX Cloud II Core Wireless 耳机",
+    "vendor": "极度未知 HyperX",
     "icon": "headset",
     "link": "2.4G",
     "profile": "hyperx-cloud3-wireless",
-    "known_ids": [{"vid": "03F0", "pid": "0995", "wired_pid": ""}, {"vid": "03F0", "pid": "0795", "wired_pid": ""}],
-    "products": ["CLOUD II"],
-    "keywords": "Cloud II Core"
+    "known_ids": [
+      {
+        "vid": "03F0",
+        "pid": "0995",
+        "wired_pid": ""
+      },
+      {
+        "vid": "03F0",
+        "pid": "0795",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "CLOUD II"
+    ],
+    "keywords": "Cloud II Core HyperX Wireless"
   },
   "pulsar-x2": {
-    "label": "Pulsar X2 鼠标",
-    "vendor": "Pulsar 派世",
+    "label": "派世 Pulsar X2 鼠标",
+    "vendor": "派世 Pulsar",
     "icon": "mouse",
     "link": "2.4G",
     "profile": "pulsar-x2",
-    "known_ids": [{"vid": "3554", "pid": "F508", "wired_pid": ""}, {"vid": "3554", "pid": "F507", "wired_pid": ""}, {"vid": "3710", "pid": "5406", "wired_pid": ""}, {"vid": "3710", "pid": "3414", "wired_pid": ""}, {"vid": "3710", "pid": "5501", "wired_pid": ""}],
-    "products": ["X2"],
-    "keywords": "X2"
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "F508",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3554",
+        "pid": "F507",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3710",
+        "pid": "5406",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3710",
+        "pid": "3414",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3710",
+        "pid": "5501",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "X2"
+    ],
+    "keywords": "X2 Pulsar"
   },
   "pulsar-link-8k": {
-    "label": "Pulsar Link 8K 鼠标",
-    "vendor": "Pulsar 派世",
+    "label": "派世 Pulsar Link 8K 鼠标",
+    "vendor": "派世 Pulsar",
     "icon": "mouse",
     "link": "2.4G",
     "profile": "pulsar-x2",
-    "known_ids": [{"vid": "3554", "pid": "F508", "wired_pid": ""}, {"vid": "3554", "pid": "F507", "wired_pid": ""}, {"vid": "3710", "pid": "5406", "wired_pid": ""}, {"vid": "3710", "pid": "3414", "wired_pid": ""}, {"vid": "3710", "pid": "5501", "wired_pid": ""}],
-    "products": ["LINK"],
-    "keywords": "Link 8K"
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "F508",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3554",
+        "pid": "F507",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3710",
+        "pid": "5406",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3710",
+        "pid": "3414",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3710",
+        "pid": "5501",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "LINK"
+    ],
+    "keywords": "Link 8K Pulsar"
   },
   "mchose-a7-v3-pro": {
     "label": "迈丛 A7 V3 Pro 鼠标",
@@ -354,9 +911,22 @@ const MODELS_JSON: &str = r#"{
     "icon": "mouse",
     "link": "2.4G",
     "profile": "mchose-a7-v3",
-    "known_ids": [{"vid": "3837", "pid": "1018", "wired_pid": ""}, {"vid": "3837", "pid": "1014", "wired_pid": ""}],
-    "products": ["A7 V3"],
-    "keywords": "A7 V3 Pro"
+    "known_ids": [
+      {
+        "vid": "3837",
+        "pid": "1018",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3837",
+        "pid": "1014",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "A7 V3"
+    ],
+    "keywords": "A7 V3 Pro 迈丛"
   },
   "mchose-a7-v3-ultra": {
     "label": "迈丛 A7 V3 Ultra+ 鼠标",
@@ -364,9 +934,22 @@ const MODELS_JSON: &str = r#"{
     "icon": "mouse",
     "link": "2.4G",
     "profile": "mchose-a7-v3",
-    "known_ids": [{"vid": "3837", "pid": "1018", "wired_pid": ""}, {"vid": "3837", "pid": "1014", "wired_pid": ""}],
-    "products": ["A7 V3 ULTRA"],
-    "keywords": "A7 V3 Ultra+"
+    "known_ids": [
+      {
+        "vid": "3837",
+        "pid": "1018",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3837",
+        "pid": "1014",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "A7 V3 ULTRA"
+    ],
+    "keywords": "A7 V3 Ultra+ 迈丛"
   },
   "taidu-tsg809": {
     "label": "钛度 TSG809 鼠标",
@@ -374,19 +957,352 @@ const MODELS_JSON: &str = r#"{
     "icon": "mouse",
     "link": "2.4G",
     "profile": "taidu-tsg809",
-    "known_ids": [{"vid": "A8A5", "pid": "", "wired_pid": ""}, {"vid": "A8A4", "pid": "", "wired_pid": ""}, {"vid": "3A37", "pid": "", "wired_pid": ""}],
-    "products": ["TSG809"],
-    "keywords": "TSG809"
+    "known_ids": [
+      {
+        "vid": "A8A5",
+        "pid": "",
+        "wired_pid": ""
+      },
+      {
+        "vid": "A8A4",
+        "pid": "",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3A37",
+        "pid": "",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "TSG809"
+    ],
+    "keywords": "TSG809 钛度"
   },
   "hjsdzhi-s1-v2": {
-    "label": "HJSDZHI S1-V2 鼠标",
+    "label": "钛度 HJSDZHI S1-V2 鼠标",
     "vendor": "钛度 TAIDU",
     "icon": "mouse",
     "link": "2.4G",
     "profile": "taidu-tsg809",
-    "known_ids": [{"vid": "A8A5", "pid": "", "wired_pid": ""}, {"vid": "A8A4", "pid": "", "wired_pid": ""}, {"vid": "3A37", "pid": "", "wired_pid": ""}],
-    "products": ["S1-V2"],
-    "keywords": "S1-V2"
+    "known_ids": [
+      {
+        "vid": "A8A5",
+        "pid": "",
+        "wired_pid": ""
+      },
+      {
+        "vid": "A8A4",
+        "pid": "",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3A37",
+        "pid": "",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "S1-V2"
+    ],
+    "keywords": "S1-V2 HJSDZHI"
+  }
+}"#;
+
+/// A/B 扩充型号：补充多型号共用 profile 的具体型号名，避免全部落到协议名。
+const COMMUNITY_MODELS_JSON: &str = r#"{
+  "atk-a9-ultimate": {
+    "label": "艾泰克 ATK A9 Ultimate 鼠标",
+    "vendor": "艾泰克 ATK",
+    "icon": "mouse",
+    "link": "2.4G",
+    "profile": "atk-f1-family",
+    "known_ids": [
+      {
+        "vid": "373B",
+        "pid": "11B6",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "A9 ULTIMATE"
+    ],
+    "keywords": "A9 Ultimate 艾泰克 ATK"
+  },
+  "atk-zero": {
+    "label": "艾泰克 ATK Zero 鼠标",
+    "vendor": "艾泰克 ATK",
+    "icon": "mouse",
+    "link": "2.4G",
+    "profile": "atk-vxe-nordic54",
+    "known_ids": [
+      {
+        "vid": "373B",
+        "pid": "1155",
+        "wired_pid": "1154"
+      },
+      {
+        "vid": "373B",
+        "pid": "124F",
+        "wired_pid": ""
+      },
+      {
+        "vid": "373B",
+        "pid": "1216",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "ZERO"
+    ],
+    "keywords": "Zero 艾泰克 ATK"
+  },
+  "vgn-f1-pro-4k": {
+    "label": "VGN 蜻蜓 F1 Pro 4K 鼠标",
+    "vendor": "VGN",
+    "icon": "mouse",
+    "link": "2.4G",
+    "profile": "vgn-f1-pro",
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "F505",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "F1 PRO"
+    ],
+    "keywords": "F1 Pro 4K VGN 蜻蜓"
+  },
+  "vgn-f1-pro-wired": {
+    "label": "VGN 蜻蜓 F1 Pro 有线鼠标",
+    "vendor": "VGN",
+    "icon": "mouse",
+    "link": "USB",
+    "profile": "vgn-f1-pro",
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "F502",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "F1 PRO"
+    ],
+    "keywords": "F1 Pro 有线 VGN 蜻蜓 有线鼠标"
+  },
+  "vgn-f2-master": {
+    "label": "VGN 蜻蜓 F2 大师+ 鼠标",
+    "vendor": "VGN",
+    "icon": "mouse",
+    "link": "2.4G",
+    "profile": "vgn-f2-compx",
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "FB56",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3554",
+        "pid": "FB57",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "F2"
+    ],
+    "keywords": "F2 大师 VGN 蜻蜓"
+  },
+  "vgn-f2-pro-max": {
+    "label": "VGN 蜻蜓 F2 Pro Max 鼠标",
+    "vendor": "VGN",
+    "icon": "mouse",
+    "link": "2.4G",
+    "profile": "vgn-f2-compx",
+    "known_ids": [
+      {
+        "vid": "3554",
+        "pid": "FB3D",
+        "wired_pid": ""
+      },
+      {
+        "vid": "3554",
+        "pid": "FB3E",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "F2 PRO MAX"
+    ],
+    "keywords": "F2 Pro Max VGN 蜻蜓"
+  },
+  "mchose-g87-v2": {
+    "label": "迈丛 G87 V2 键盘",
+    "vendor": "迈丛 MCHOSE",
+    "icon": "keyboard",
+    "link": "2.4G",
+    "profile": "mchose-kb",
+    "known_ids": [
+      {
+        "vid": "3837",
+        "pid": "201B",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "G87"
+    ],
+    "keywords": "G87 V2 迈丛"
+  },
+  "mchose-kb-41e4": {
+    "label": "迈丛 41E4 键盘接收器",
+    "vendor": "迈丛 MCHOSE",
+    "icon": "keyboard",
+    "link": "2.4G",
+    "profile": "mchose-kb-ff04",
+    "known_ids": [
+      {
+        "vid": "41E4",
+        "pid": "2001",
+        "wired_pid": ""
+      }
+    ],
+    "products": [],
+    "keywords": "41E4 接收器 迈丛 MCHOSE 键盘接收器"
+  },
+  "mchose-v9-turbo-plus": {
+    "label": "迈丛 V9 Turbo+ 耳机",
+    "vendor": "迈丛 MCHOSE",
+    "icon": "headset",
+    "link": "2.4G",
+    "profile": "mchose-v9-headset",
+    "known_ids": [
+      {
+        "vid": "3837",
+        "pid": "600A",
+        "wired_pid": ""
+      },
+      {
+        "vid": "291D",
+        "pid": "385D",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "V9 TURBO+"
+    ],
+    "keywords": "V9 Turbo+ 迈丛"
+  },
+  "mchose-v9-turbo": {
+    "label": "迈丛 V9 Turbo 耳机",
+    "vendor": "迈丛 MCHOSE",
+    "icon": "headset",
+    "link": "2.4G",
+    "profile": "mchose-v9-headset",
+    "known_ids": [
+      {
+        "vid": "3837",
+        "pid": "600D",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "V9 TURBO"
+    ],
+    "keywords": "V9 Turbo 迈丛"
+  },
+  "mchose-x9": {
+    "label": "迈丛 X9 耳机",
+    "vendor": "迈丛 MCHOSE",
+    "icon": "headset",
+    "link": "2.4G",
+    "profile": "mchose-v9-headset",
+    "known_ids": [
+      {
+        "vid": "3837",
+        "pid": "6045",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "X9"
+    ],
+    "keywords": "X9 迈丛"
+  },
+  "mchose-v9-pro2": {
+    "label": "迈丛 V9 Pro 2 耳机",
+    "vendor": "迈丛 MCHOSE",
+    "icon": "headset",
+    "link": "2.4G",
+    "profile": "mchose-v9-pro2-headset",
+    "known_ids": [
+      {
+        "vid": "3837",
+        "pid": "6011",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "MCHOSE V9 Pro 2"
+    ],
+    "keywords": "V9 Pro 2 V9PRO2 6011 耳机 MCHOSE"
+  },
+  "mchose-r9": {
+    "label": "迈丛 R9 耳机",
+    "vendor": "迈丛 MCHOSE",
+    "icon": "headset",
+    "link": "2.4G",
+    "profile": "mchose-r9-headset",
+    "known_ids": [
+      {
+        "vid": "3837",
+        "pid": "6013",
+        "wired_pid": ""
+      }
+    ],
+    "products": [
+      "MCHOSE R9"
+    ],
+    "keywords": "R9 6013 耳机 MCHOSE"
+  },
+  "vxe-mad-r": {
+    "label": "威界 VXE MAD R 鼠标",
+    "vendor": "威界 VXE",
+    "icon": "mouse",
+    "link": "2.4G",
+    "profile": "compx-ff02-17b",
+    "known_ids": [
+      {
+        "vid": "373B",
+        "pid": "104D",
+        "wired_pid": "103F"
+      }
+    ],
+    "products": [
+      "MAD R"
+    ],
+    "keywords": "MAD R 104D 103F VXE 鼠标"
+  },
+  "vxe-mad-r-major-plus": {
+    "label": "威界 VXE MAD R Major Plus 鼠标",
+    "vendor": "威界 VXE",
+    "icon": "mouse",
+    "link": "2.4G",
+    "profile": "compx-ff02-17b",
+    "known_ids": [
+      {
+        "vid": "373B",
+        "pid": "1040",
+        "wired_pid": "104C"
+      }
+    ],
+    "products": [
+      "MAD R MAJOR PLUS"
+    ],
+    "keywords": "MAD R Major Plus 1040 104C VXE 鼠标"
   }
 }"#;
 
@@ -463,8 +1379,12 @@ fn synthetic(profile: &Profile) -> Model {
 /// 载入显式型号 + 协议表里没有显式条目的自动型号。
 pub fn load(profiles: &HashMap<String, Profile>) -> HashMap<String, Model> {
     let mut models = HashMap::new();
-    let explicit: HashMap<String, Model> =
-        serde_json::from_str(MODELS_JSON).unwrap_or_else(|_| HashMap::new());
+    let mut explicit: HashMap<String, Model> = HashMap::new();
+    for text in [MODELS_JSON, COMMUNITY_MODELS_JSON] {
+        if let Ok(map) = serde_json::from_str::<HashMap<String, Model>>(text) {
+            explicit.extend(map);
+        }
+    }
     let mut covered: HashSet<String> = HashSet::new();
     for (id, model) in explicit {
         let mut model = model;
@@ -610,5 +1530,27 @@ pub fn pick<'a>(
     ModelPick {
         candidates,
         selected: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loads_community_models() {
+        let (profiles, errors) = crate::battery::profiles::load(&[]);
+        assert!(errors.is_empty(), "{errors:?}");
+        let models = load(&profiles);
+        assert!(models.contains_key("atk-a9-ultimate"));
+        assert!(models.contains_key("mchose-g87-v2"));
+        assert!(models.contains_key("mchose-v9-turbo-plus"));
+        assert!(models.contains_key("mchose-v9-pro2"));
+        assert!(models.contains_key("mchose-r9"));
+        assert!(models.contains_key("vxe-mad-r"));
+        assert_eq!(models["mchose-g87-v2"].profile, "mchose-kb");
+        assert_eq!(models["mchose-x9"].profile, "mchose-v9-headset");
+        assert_eq!(models["mchose-v9-pro2"].profile, "mchose-v9-pro2-headset");
+        assert_eq!(models["vxe-mad-r"].profile, "compx-ff02-17b");
     }
 }

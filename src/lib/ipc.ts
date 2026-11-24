@@ -119,7 +119,7 @@ export function testAlert(payload?: AlertTestPayload): Promise<void> {
   return invoke<void>('test_alert', { payload: payload ?? null })
 }
 
-/** 试一次托盘红色闪电闪烁。 */
+/** 试一次当前托盘样式的红色闪烁。 */
 export function testTrayBlink(): Promise<void> {
   return invoke<void>('test_tray_blink')
 }

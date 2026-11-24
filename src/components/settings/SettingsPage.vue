@@ -17,11 +17,12 @@ import StepperControl from '../StepperControl.vue';
 import ToggleSwitch from '../ToggleSwitch.vue';
 import PillButton from '../PillButton.vue';
 import LineIcon from '../icons/LineIcon.vue';
+import TrayStyleIcon from '../icons/TrayStyleIcon.vue';
 import { useAlertsStore } from '../../stores/alerts';
 import { useConfigStore } from '../../stores/config';
 import { useUiStore } from '../../stores/ui';
 import * as ipc from '../../lib/ipc';
-import type { ThemeMode, TrayLevelMode, UiStyle } from '../../types/config';
+import type { ThemeMode, TrayIconStyle, TrayLevelMode, UiStyle } from '../../types/config';
 
 const config = useConfigStore();
 const alerts = useAlertsStore();
@@ -78,7 +79,7 @@ function formatBlinkSeconds(value: number): string {
   return `${value} 秒`;
 }
 
-/** 试一次托盘红色闪电闪烁；图标与时长都由 Rust 处理。 */
+/** 试一次当前样式的托盘红色闪烁；图标与时长都由 Rust 处理。 */
 async function onTestTrayBlink(): Promise<void> {
   await ipc.testTrayBlink();
 }
@@ -89,6 +90,17 @@ const TRAY_LEVEL_OPTIONS: { value: TrayLevelMode; label: string; expandable?: bo
   { value: 'average', label: '设备平均值' },
   { value: 'device', label: '自选设备', expandable: true },
   { value: 'min', label: '最低电量' },
+];
+
+const TRAY_STYLE_OPTIONS: {
+  value: TrayIconStyle;
+  label: string;
+  preview: typeof TrayStyleIcon;
+  previewProps: { kind: 'bolt' | 'ring' | 'battery' };
+}[] = [
+  { value: 'bolt', label: '闪电', preview: TrayStyleIcon, previewProps: { kind: 'bolt' } },
+  { value: 'ring', label: '圆环', preview: TrayStyleIcon, previewProps: { kind: 'ring' } },
+  { value: 'battery', label: '电池', preview: TrayStyleIcon, previewProps: { kind: 'battery' } },
 ];
 
 const deviceChoices = computed(() => config.devices);
@@ -770,7 +782,7 @@ onBeforeUnmount(() => {
             :disabled="settings.alert_mode === 'popup'"
             @toggle="trayFold = !trayFold"
           >
-            <SettingRow label="闪烁时长" hint="低电量时托盘闪电图标变红并闪烁的持续时间" size="sub">
+            <SettingRow label="闪烁时长" hint="低电量时托盘图标变红并闪烁的持续时间" size="sub">
               <StepperControl
                 :model-value="settings.tray_blink_seconds"
                 :min="5"
@@ -787,7 +799,7 @@ onBeforeUnmount(() => {
             </SettingRow>
           </FoldSection>
 
-          <SettingRow label="托盘图标取值方式" hint="托盘闪电图标显示哪一路电量">
+          <SettingRow label="托盘图标取值方式" hint="托盘图标显示哪一路电量">
             <SegmentedControl
               :model-value="settings.tray_level_mode"
               :options="TRAY_LEVEL_OPTIONS"
@@ -815,6 +827,13 @@ onBeforeUnmount(() => {
               还没有添加设备
             </span>
           </div>
+          <SettingRow label="托盘图标样式" hint="托盘图标外观：闪电 / 圆环 / 电池">
+            <SegmentedControl
+              :model-value="settings.tray_icon_style"
+              :options="TRAY_STYLE_OPTIONS"
+              @update:model-value="write('tray_icon_style', $event)"
+            />
+          </SettingRow>
         </div>
 
         <h2 class="settings__title">启动与配置</h2>

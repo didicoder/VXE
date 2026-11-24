@@ -18,7 +18,7 @@ struct ProfilePick<'a> {
 }
 
 /// 同 VID/PID 被多颗公版接收器共用时（`3554:FA09` 的凌豹 K98 / 狼蛛 F99 /
-/// 迈从 G75 / LEOBOG），先按会话 ACK 型号码分流；读不到型号就退回中性命名。
+/// 迈丛 G75 / LEOBOG），先按会话 ACK 型号码分流；读不到型号就退回中性命名。
 fn cross_vendor(exact: &[&profiles::Profile]) -> bool {
     exact
         .first()
@@ -724,6 +724,10 @@ pub fn probe_unknown(dirs: &[PathBuf], unknown: &UnknownHid) -> Result<ProbeResu
         probe.match_rule = profiles::MatchRule {
             usage_page: unknown.usage_page,
             usage: Some(unknown.usage),
+            interface: None,
+            collection: None,
+            feature_len: None,
+            ignore_usage_page: false,
             require_pid_hit: true,
         };
         let first = hid::read_by_profile(&spec, &probe);

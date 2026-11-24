@@ -15,6 +15,7 @@ use crate::window_mgr;
 
 pub struct AppState {
     pub store: Mutex<Store>,
+    pub passive: crate::battery::passive::Hub,
     pub statuses: Mutex<Vec<DeviceStatus>>,
     pub refresh_lock: Mutex<()>,
     pub low_notify: Mutex<HashMap<String, LowNotifyState>>,
@@ -115,9 +116,8 @@ pub fn set_setting(
         "hotkey" | "hotkey_enabled" => reload_hotkey(&app),
         "theme_mode" | "theme_light_at" | "theme_dark_at" => crate::theme::apply(&app),
         "ui_theme" => crate::theme::apply_icon_for_current(&app),
-        "good_level" | "warn_level" | "tray_level_mode" | "tray_level_device" => {
-            crate::tray::refresh_battery_icon(&app)
-        }
+        "good_level" | "warn_level" | "tray_level_mode" | "tray_level_device"
+        | "tray_icon_style" => crate::tray::refresh_battery_icon(&app),
         _ => {}
     }
     let _ = app.emit("config-changed", ());
@@ -144,7 +144,8 @@ pub fn set_settings(
     let touch_tray = patch.contains_key("good_level")
         || patch.contains_key("warn_level")
         || patch.contains_key("tray_level_mode")
-        || patch.contains_key("tray_level_device");
+        || patch.contains_key("tray_level_device")
+        || patch.contains_key("tray_icon_style");
     for (key, value) in patch {
         store.set(&key, value).map_err(|err| err.to_string())?;
     }
@@ -1015,7 +1016,7 @@ pub fn pick_card_image_file(window: tauri::WebviewWindow) -> Result<Option<Strin
     Ok(Some(path))
 }
 
-/// 设置页「测试」：立即闪一次红色闪电，时长取托盘闪烁设置。
+/// 设置页「测试」：立即按当前托盘样式闪一次红色提醒，时长取托盘闪烁设置。
 #[tauri::command]
 pub fn test_tray_blink(app: AppHandle) {
     let seconds = app

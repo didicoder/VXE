@@ -11,16 +11,38 @@ use crate::tray_icon;
 const ICON_SIZE: u32 = tray_icon::ICON_SIZE;
 const BLINK_INTERVAL_MS: u64 = 500;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct IconKey {
+    style: tray_icon::IconStyle,
+    level: u8,
+    tier: tray_icon::Tier,
+    neutral: bool,
+}
+
 #[derive(Debug)]
 struct BlinkState {
     epoch: u64,
     active: bool,
+    icon_key: Option<IconKey>,
 }
 
 static BLINK: Mutex<BlinkState> = Mutex::new(BlinkState {
     epoch: 0,
     active: false,
+    icon_key: None,
 });
+
+fn current_style(app: &AppHandle) -> tray_icon::IconStyle {
+    app.try_state::<AppState>()
+        .and_then(|state| {
+            state
+                .store
+                .lock()
+                .ok()
+                .map(|store| tray_icon::IconStyle::parse(store.tray_icon_style()))
+        })
+        .unwrap_or(tray_icon::IconStyle::Bolt)
+}
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let mut builder = TrayIconBuilder::with_id("main-tray")
@@ -69,7 +91,9 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             _ => {}
         });
 
-    builder = builder.icon(image(tray_icon::render_neutral()));
+    let style = current_style(app);
+    tray_log(&format!("create style={}", style.as_str()));
+    builder = builder.icon(image(tray_icon::render_neutral(style)));
     let tray = builder.build(app)?;
     app.manage(tray);
     Ok(())
@@ -107,14 +131,23 @@ fn set_icon(app: &AppHandle, rgba: Vec<u8>) {
     }
 }
 
-fn set_icon_if_idle(app: &AppHandle, rgba: Vec<u8>) {
-    let Ok(state) = BLINK.lock() else {
-        return;
+fn set_icon_if_idle(app: &AppHandle, rgba: Vec<u8>, key: IconKey) -> bool {
+    let Ok(mut state) = BLINK.lock() else {
+        return false;
     };
     if state.active {
-        return;
+        return false;
     }
     set_icon(app, rgba);
+    state.icon_key = Some(key);
+    true
+}
+
+fn icon_key_matches(key: IconKey) -> bool {
+    BLINK
+        .lock()
+        .map(|state| state.icon_key == Some(key))
+        .unwrap_or(false)
 }
 
 /// 托盘图标的电量：实时读数优先，休眠/掉线退回上次读数（和总览 Hero 一致）。
@@ -176,16 +209,36 @@ pub fn update_for_statuses(
     warn: i32,
     mode: &str,
     device: &str,
+    style: &str,
 ) {
-    let icon = match level_for_source(statuses, mode, device) {
+    let style = tray_icon::IconStyle::parse(style);
+    let key = match level_for_source(statuses, mode, device) {
         Some(level) => {
             let tier =
                 tray_icon::Tier::of(level, good.clamp(0, 100) as u8, warn.clamp(0, 100) as u8);
-            tray_icon::render_tier(level, tier)
+            IconKey {
+                style,
+                level: tray_icon::quantize(level),
+                tier,
+                neutral: false,
+            }
         }
-        None => tray_icon::render_neutral(),
+        None => IconKey {
+            style,
+            level: 0,
+            tier: tray_icon::Tier::Low,
+            neutral: true,
+        },
     };
-    set_icon_if_idle(app, icon);
+    if icon_key_matches(key) {
+        return;
+    }
+    let icon = if key.neutral {
+        tray_icon::render_neutral(style)
+    } else {
+        tray_icon::render_style(style, key.level, key.tier.color())
+    };
+    set_icon_if_idle(app, icon, key);
 }
 
 /// 设置页改电量区间后立即重算图标，不必等下一次采集。
@@ -198,7 +251,7 @@ pub fn refresh_battery_icon(app: &AppHandle) {
         .lock()
         .map(|statuses| statuses.clone())
         .unwrap_or_default();
-    let (good, warn, mode, device) = state
+    let (good, warn, mode, device, style) = state
         .store
         .lock()
         .map(|store| {
@@ -207,28 +260,32 @@ pub fn refresh_battery_icon(app: &AppHandle) {
                 store.warn_level(),
                 store.tray_level_mode(),
                 store.tray_level_device(),
+                store.tray_icon_style(),
             )
         })
-        .unwrap_or((80, 20, "average", String::new()));
-    update_for_statuses(app, &statuses, good, warn, mode, &device);
+        .unwrap_or((80, 20, "average", String::new(), "bolt"));
+    update_for_statuses(app, &statuses, good, warn, mode, &device, style);
 }
 
-/// 低电量提醒：闪全红的闪电图标，返回设置里的时长后恢复当前电量图标。
+/// 低电量提醒：按当前样式闪全红，返回设置里的时长后恢复当前电量图标。
 pub fn start_blink(app: &AppHandle, seconds: u64) {
+    let style = current_style(app);
     let epoch = {
         let Ok(mut state) = BLINK.lock() else {
             return;
         };
         state.epoch = state.epoch.wrapping_add(1);
         state.active = true;
+        state.icon_key = None;
         state.epoch
     };
+    tray_log(&format!("blink style={}", style.as_str()));
 
-    let red = tray_icon::render(100, tray_icon::RED);
-    set_icon(app, red.clone());
+    let on = tray_icon::render_alert_on(style);
+    let off = tray_icon::render_alert_off(style);
+    set_icon(app, on.clone());
 
     let app = app.clone();
-    let blank = tray_icon::blank();
     let steps = seconds.clamp(1, 600) * 2;
     let _ = std::thread::Builder::new()
         .name("vxe-tray-blink".to_string())
@@ -245,9 +302,9 @@ pub fn start_blink(app: &AppHandle, seconds: u64) {
                     set_icon(
                         &app,
                         if step % 2 == 0 {
-                            blank.clone()
+                            off.clone()
                         } else {
-                            red.clone()
+                            on.clone()
                         },
                     );
                 }

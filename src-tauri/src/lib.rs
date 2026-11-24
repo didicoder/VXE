@@ -83,6 +83,7 @@ pub fn run() {
             let _ = store.migrate_scales();
             let _ = store.split_surfaces();
             let _ = store.cleanup_dead_keys();
+            let _ = store.migrate_device_labels();
             let hotkey_enabled = store
                 .get("hotkey_enabled")
                 .and_then(|value| value.as_bool())
@@ -99,6 +100,7 @@ pub fn run() {
                 .unwrap_or(false);
             app.manage(commands::AppState {
                 store: std::sync::Mutex::new(store),
+                passive: crate::battery::passive::Hub::new(),
                 statuses: std::sync::Mutex::new(Vec::new()),
                 refresh_lock: std::sync::Mutex::new(()),
                 low_notify: std::sync::Mutex::new(std::collections::HashMap::new()),
@@ -196,15 +198,20 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            if matches!(event, tauri::RunEvent::MainEventsCleared) {
+            if matches!(&event, tauri::RunEvent::MainEventsCleared) {
                 window_mgr::drain_actions(app);
             }
-            // 回收最后一个 WebView 后继续托盘常驻；菜单显式 exit(0) 仍正常退出。
-            if let tauri::RunEvent::ExitRequested {
-                code: None, api, ..
-            } = event
-            {
-                api.prevent_exit();
+            match &event {
+                // 回收最后一个 WebView 后继续托盘常驻；菜单显式 exit(0) 仍正常退出。
+                tauri::RunEvent::ExitRequested {
+                    code: None, api, ..
+                } => api.prevent_exit(),
+                tauri::RunEvent::ExitRequested { code: Some(_), .. } | tauri::RunEvent::Exit => {
+                    if let Some(state) = app.try_state::<commands::AppState>() {
+                        state.passive.shutdown();
+                    }
+                }
+                _ => {}
             }
         });
 }

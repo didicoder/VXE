@@ -187,6 +187,7 @@ fn collect_and_store(app: &AppHandle, state: &AppState) -> Result<Vec<DeviceStat
         tray_blink_seconds,
         tray_level_mode,
         tray_level_device,
+        tray_icon_style,
     ) = {
         let store = state.store.lock().map_err(|_| "config lock poisoned")?;
         let last_levels = store
@@ -228,10 +229,12 @@ fn collect_and_store(app: &AppHandle, state: &AppState) -> Result<Vec<DeviceStat
             store.tray_blink_seconds(),
             store.tray_level_mode(),
             store.tray_level_device(),
+            store.tray_icon_style(),
         )
     };
 
-    let mut statuses = battery::read_all(&specs, &profile_dirs, Some(&log_dir));
+    let mut statuses =
+        battery::read_all(&specs, &profile_dirs, Some(&log_dir), Some(&state.passive));
     let mut levels_changed = false;
     for status in &mut statuses {
         let spec = specs.iter().find(|spec| spec.id == status.id);
@@ -272,6 +275,7 @@ fn collect_and_store(app: &AppHandle, state: &AppState) -> Result<Vec<DeviceStat
         warn,
         tray_level_mode,
         &tray_level_device,
+        tray_icon_style,
     );
     let _ = app.emit("devices-updated", &statuses);
     crate::window_mgr::relayout_popup(app);

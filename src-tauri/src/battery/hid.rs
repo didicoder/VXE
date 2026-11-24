@@ -40,8 +40,8 @@ use windows::Win32::Devices::DeviceAndDriverInstallation::{
 };
 use windows::Win32::Devices::HumanInterfaceDevice::{
     HIDP_CAPS, HidD_FreePreparsedData, HidD_GetFeature, HidD_GetManufacturerString,
-    HidD_GetPreparsedData, HidD_GetProductString, HidD_SetFeature, HidP_GetCaps,
-    PHIDP_PREPARSED_DATA,
+    HidD_GetPreparsedData, HidD_GetProductString, HidD_SetFeature, HidD_SetOutputReport,
+    HidP_GetCaps, PHIDP_PREPARSED_DATA,
 };
 use windows::Win32::Foundation::{CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE, WAIT_OBJECT_0};
 use windows::Win32::Storage::FileSystem::{
@@ -51,7 +51,8 @@ use windows::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
 use windows::Win32::System::Threading::WaitForSingleObject;
 use windows::core::{GUID, PCWSTR};
 
-use crate::battery::profiles::{LevelEncoding, Pick, Profile, Transport};
+use crate::battery::decode;
+use crate::battery::profiles::{LevelEncoding, MatchRule, Pick, Profile, Transport, WriteMode};
 use crate::battery::{BatteryState, DeviceSpec, ReadResult};
 
 /// HID device interface class `{4D1E55B2-F16F-11CF-88CB-001111000030}`.
@@ -116,6 +117,10 @@ pub struct HidDevice {
     pub product: String,
     pub manufacturer: String,
     pub is_bluetooth: bool,
+    /// 路径里的 `mi_XX` 接口号；非复合设备为 None。
+    pub interface_no: Option<u8>,
+    /// 路径里的 `colXX` 集合号；没有时为 None。
+    pub collection_no: Option<u8>,
     /// 接收器/设备的稳定实例键（同一接收器的多个 collection 共用一个值）。
     pub instance: String,
 }
@@ -202,6 +207,26 @@ fn parse_ids(path: &str) -> (String, String, bool) {
         grab(&low, "pid"),
         is_bluetooth_path(&low),
     )
+}
+
+/// `(interface_no, collection_no)` from the path's interface segment.
+fn parse_mi_col(path: &str) -> (Option<u8>, Option<u8>) {
+    let low = path.to_ascii_lowercase();
+    let mut parts = low.split('#');
+    let _device = parts.next();
+    let Some(interface) = parts.next() else {
+        return (None, None);
+    };
+    let mut interface_no = None;
+    let mut collection_no = None;
+    for part in interface.split('&') {
+        if let Some(rest) = part.strip_prefix("mi_") {
+            interface_no = u8::from_str_radix(rest, 16).ok();
+        } else if let Some(rest) = part.strip_prefix("col") {
+            collection_no = rest.parse::<u8>().ok();
+        }
+    }
+    (interface_no, collection_no)
 }
 
 /// 同一接收器的多个 collection 共用实例键：路径里 `#8&687e681&0&0003#` 的
@@ -467,6 +492,7 @@ fn list_interfaces(min_page: u16, read_only: bool, with_strings: bool) -> Vec<In
             (String::new(), String::new())
         };
         let (vid, pid, is_bluetooth) = parse_ids(&path);
+        let (interface_no, collection_no) = parse_mi_col(&path);
         found.push(Interface {
             dev: HidDevice {
                 instance: instance_of(&path),
@@ -478,6 +504,8 @@ fn list_interfaces(min_page: u16, read_only: bool, with_strings: bool) -> Vec<In
                 product,
                 manufacturer,
                 is_bluetooth,
+                interface_no,
+                collection_no,
             },
             in_len: caps.InputReportByteLength,
             out_len: caps.OutputReportByteLength,
@@ -595,7 +623,15 @@ fn query(
     in_len: usize,
     timeout_ms: u32,
 ) -> Option<Vec<u8>> {
-    query_matching(path, payload, out_len, in_len, timeout_ms, None)
+    query_matching(
+        path,
+        payload,
+        out_len,
+        in_len,
+        timeout_ms,
+        None,
+        WriteMode::WriteFile,
+    )
 }
 
 fn query_matching(
@@ -605,26 +641,35 @@ fn query_matching(
     in_len: usize,
     timeout_ms: u32,
     profile: Option<&Profile>,
+    write_mode: WriteMode,
 ) -> Option<Vec<u8>> {
-    let handle = open_path(path, true, true)?;
-    let write_timeout = if profile.is_some_and(|p| p.id == "atk-a87-pro") {
-        400
-    } else {
-        timeout_ms
-    };
-
     let mut write_buffer = vec![0u8; out_len.max(1)];
     let copied = payload.len().min(write_buffer.len());
     write_buffer[..copied].copy_from_slice(&payload[..copied]);
-    let write = io_once(handle.raw(), IoOp::Write(&write_buffer), write_timeout);
-    if write.leaked {
-        std::mem::forget(write_buffer);
-        return None;
-    }
-    let written = write.transferred? as usize;
-    if profile.is_some() && written != write_buffer.len() {
-        return None;
-    }
+
+    let handle = if write_mode == WriteMode::SetOutputReport {
+        if !set_output_report(path, &write_buffer) {
+            return None;
+        }
+        open_path(path, true, true)?
+    } else {
+        let handle = open_path(path, true, true)?;
+        let write_timeout = if profile.is_some_and(|p| p.id == "atk-a87-pro") {
+            400
+        } else {
+            timeout_ms
+        };
+        let write = io_once(handle.raw(), IoOp::Write(&write_buffer), write_timeout);
+        if write.leaked {
+            std::mem::forget(write_buffer);
+            return None;
+        }
+        let written = write.transferred? as usize;
+        if profile.is_some() && written != write_buffer.len() {
+            return None;
+        }
+        handle
+    };
 
     let deadline = std::time::Instant::now() + Duration::from_millis(u64::from(timeout_ms));
     loop {
@@ -659,10 +704,20 @@ fn query_matching(
     }
 }
 
+/// `HidD_SetOutputReport` on a synchronous read/write handle (ROG PELTA).
+fn set_output_report(path: &str, frame: &[u8]) -> bool {
+    let Some(handle) = open_path(path, true, false) else {
+        return false;
+    };
+    // SAFETY: `frame` is a valid readable buffer and the length matches it;
+    // the handle comes from a successful read/write open.
+    unsafe { HidD_SetOutputReport(handle.raw(), frame.as_ptr().cast(), frame.len() as u32) }
+}
+
 /// V16 `read_feature`: `HidD_GetFeature` on a read-only handle.
 fn read_feature(path: &str, report_id: u8, length: usize) -> Option<Vec<u8>> {
     let handle = open_path(path, false, false)?;
-    let size = length.clamp(1, 512);
+    let size = length.clamp(1, 1024);
     let mut buffer = vec![0u8; size];
     buffer[0] = report_id;
     // SAFETY: `buffer` is `size` bytes long and the length passed matches it; the
@@ -676,13 +731,46 @@ fn set_feature(path: &str, payload: &[u8], length: usize) -> bool {
     let Some(handle) = open_path(path, true, false) else {
         return false;
     };
-    let size = length.clamp(1, 512);
+    let size = length.clamp(1, 1024);
     let mut buffer = vec![0u8; size];
     let n = payload.len().min(size);
     buffer[..n].copy_from_slice(&payload[..n]);
     // SAFETY: `buffer` is `size` bytes and matches the length passed; the handle
     // comes from a successful read-write open.
     unsafe { HidD_SetFeature(handle.raw(), buffer.as_ptr().cast(), size as u32) }
+}
+
+/// 只监听 Input Report，不向设备写任何请求（被动 profile 的单次探测）。
+fn read_passive(path: &str, in_len: usize, timeout_ms: u32, profile: &Profile) -> Option<Vec<u8>> {
+    let handle = open_path(path, false, true)?;
+    let deadline = std::time::Instant::now() + Duration::from_millis(u64::from(timeout_ms));
+    loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return None;
+        }
+        let mut buffer = vec![0u8; in_len.max(1)];
+        let read = io_once(
+            handle.raw(),
+            IoOp::Read(&mut buffer),
+            remaining.as_millis().clamp(1, u128::from(u32::MAX)) as u32,
+        );
+        if read.leaked {
+            std::mem::forget(buffer);
+            return None;
+        }
+        let Some(count) = read.transferred else {
+            continue;
+        };
+        let count = count as usize;
+        if count == 0 {
+            continue;
+        }
+        buffer.truncate(count.min(buffer.len()));
+        if parse_report(profile, &buffer, false).0.is_some() {
+            return Some(buffer);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -710,20 +798,40 @@ fn link_filter(link: &str) -> Option<bool> {
 }
 
 /// Interface filter used by `read_by_profile`.
-fn candidate_ok(
-    device: &HidDevice,
+fn interface_ok(
+    interface: &Interface,
     vid: &str,
-    usage_page: u16,
-    usage: Option<u16>,
+    rule: &MatchRule,
     want_bluetooth: Option<bool>,
 ) -> bool {
-    if device.usage_page != usage_page || device.vid != vid {
+    let device = &interface.dev;
+    if device.vid != vid {
         return false;
     }
-    if usage.is_some_and(|usage| device.usage != usage) {
+    if !rule.ignore_usage_page && device.usage_page != rule.usage_page {
+        return false;
+    }
+    if rule.usage.is_some_and(|usage| device.usage != usage) {
         return false;
     }
     if want_bluetooth.is_some_and(|want| device.is_bluetooth != want) {
+        return false;
+    }
+    if let Some(want) = rule.interface {
+        let actual = device.interface_no.unwrap_or(0);
+        if actual != want {
+            return false;
+        }
+    }
+    if let Some(want) = rule.collection {
+        let actual = device.collection_no.unwrap_or(1);
+        if actual != want {
+            return false;
+        }
+    }
+    if let Some(want) = rule.feature_len
+        && interface.feat_len != want
+    {
         return false;
     }
     true
@@ -736,6 +844,22 @@ fn payload_with_report_id(payload: &[u8], report_id: Option<u8>) -> Vec<u8> {
         *first = id;
     }
     out
+}
+
+fn prepare_request_frame(
+    profile: &Profile,
+    payload: &[u8],
+    out_len: usize,
+) -> Result<Vec<u8>, String> {
+    let mut frame = payload_with_report_id(payload, profile.request.report_id);
+    if out_len > 0 {
+        frame.resize(out_len, 0);
+    }
+    let mut frame = decode::transform(&frame, profile.request.transform).into_owned();
+    if let Some(spec) = &profile.request.checksum {
+        decode::apply_request_checksum(&mut frame, spec)?;
+    }
+    Ok(frame)
 }
 
 /// V16 `_parse_level`: validate the raw value, scale it, clamp to 0..=100.
@@ -885,7 +1009,11 @@ fn sample(
             if out_len == 0 {
                 out_len = 64;
             }
-            if !set_feature(&interface.dev.path, payload, out_len) {
+            let frame = match prepare_request_frame(profile, payload, out_len) {
+                Ok(frame) => frame,
+                Err(_) => return (None, wired),
+            };
+            if !set_feature(&interface.dev.path, &frame, out_len) {
                 return (None, wired);
             }
             std::thread::sleep(std::time::Duration::from_millis(80));
@@ -911,14 +1039,31 @@ fn sample(
             if profile.id == "atk-a87-pro" && (interface.out_len != 33 || interface.in_len != 33) {
                 return (None, wired);
             }
+            let frame = match prepare_request_frame(profile, payload, out_len) {
+                Ok(frame) => frame,
+                Err(_) => return (None, wired),
+            };
             query_matching(
                 &interface.dev.path,
-                payload,
+                &frame,
                 out_len,
                 in_len,
                 timeout_ms,
                 request.read_matching.then_some(profile),
+                request.write_mode,
             )
+        }
+        Transport::Passive => {
+            let in_len = or_len(
+                request.in_len.map(|len| len as usize),
+                interface.in_len as usize,
+            );
+            let wait_ms = profile
+                .passive
+                .map(|passive| passive.initial_wait_ms)
+                .unwrap_or(2500)
+                .clamp(100, 10_000) as u32;
+            read_passive(&interface.dev.path, in_len, wait_ms, profile)
         }
     };
 
@@ -939,6 +1084,13 @@ fn sample(
 
 fn parse_report(profile: &Profile, raw: &[u8], wired: bool) -> (Option<i64>, bool) {
     let response = &profile.response;
+    let decoded = decode::transform(raw, response.transform);
+    if let Some(spec) = &response.checksum
+        && !decode::verify_checksum(&decoded, spec)
+    {
+        return (None, wired);
+    }
+    let raw = decoded.as_ref();
     if raw.len() < response.min_length
         || response
             .exact_length
@@ -1096,18 +1248,21 @@ fn try_interfaces(
 fn read_once(dev: &DeviceSpec, profile: &Profile) -> ReadResult {
     let rule = &profile.match_rule;
     let usage_page = rule.usage_page;
-    let usage = rule.usage;
     let vid = dev.vid.to_ascii_uppercase();
     let pid = dev.pid.to_ascii_uppercase();
     let wired_pid = dev.wired_pid.to_ascii_uppercase();
     let want_bluetooth = link_filter(&dev.link);
-    let payload = payload_with_report_id(&profile.request.payload, profile.request.report_id);
+    let payload = profile.request.payload.as_slice();
 
     // Vendor-page profiles only need the vendor range; others must see every page.
-    let floor = if usage_page >= 0xFF00 { 0xFF00 } else { 0 };
+    let floor = if usage_page >= 0xFF00 && !rule.ignore_usage_page {
+        0xFF00
+    } else {
+        0
+    };
     let matching: Vec<Interface> = list_interfaces(floor, true, false)
         .into_iter()
-        .filter(|interface| candidate_ok(&interface.dev, &vid, usage_page, usage, want_bluetooth))
+        .filter(|interface| interface_ok(interface, &vid, rule, want_bluetooth))
         .collect();
     // 已绑定的接收器必须严格匹配；拔出或换端口后由添加页重新绑定，
     // 不得静默读取另一台同 VID/PID 接收器。旧配置未存实例时保留兼容。
@@ -1138,12 +1293,12 @@ fn read_once(dev: &DeviceSpec, profile: &Profile) -> ReadResult {
                 interface.dev.path
             ));
         }
-        if let Some(result) = try_interfaces(&exact, profile, &payload, &wired_pid) {
+        if let Some(result) = try_interfaces(&exact, profile, payload, &wired_pid) {
             return result;
         }
     }
     let wide: Vec<&Interface> = all.iter().collect();
-    try_interfaces(&wide, profile, &payload, &wired_pid).unwrap_or(ReadResult {
+    try_interfaces(&wide, profile, payload, &wired_pid).unwrap_or(ReadResult {
         state: BatteryState::Absent,
         level: None,
         charging: false,
@@ -1199,6 +1354,79 @@ fn sanitized_timeout(value: f64) -> f64 {
     } else {
         DEFAULT_TOTAL_TIMEOUT_S
     }
+}
+
+/// 被动监听用的长生命周期只读句柄；由 `passive.rs` 的监听线程独占。
+pub struct PassiveReader {
+    handle: Handle,
+}
+
+impl PassiveReader {
+    pub fn open(path: &str) -> Option<Self> {
+        open_path(path, false, true).map(|handle| Self { handle })
+    }
+
+    /// 在 `timeout_ms` 内等待一帧能通过 profile 解析的 Input Report。
+    pub fn read(&self, in_len: usize, timeout_ms: u32, profile: &Profile) -> Option<(u8, bool)> {
+        let deadline = std::time::Instant::now() + Duration::from_millis(u64::from(timeout_ms));
+        loop {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return None;
+            }
+            let mut buffer = vec![0u8; in_len.max(1)];
+            let read = io_once(
+                self.handle.raw(),
+                IoOp::Read(&mut buffer),
+                remaining.as_millis().clamp(1, u128::from(u32::MAX)) as u32,
+            );
+            if read.leaked {
+                std::mem::forget(buffer);
+                return None;
+            }
+            let count = read.transferred? as usize;
+            if count == 0 {
+                continue;
+            }
+            buffer.truncate(count.min(buffer.len()));
+            let (level, charging) = parse_report(profile, &buffer, false);
+            if let Some(level) = level {
+                return Some((level.clamp(0, 100) as u8, charging));
+            }
+        }
+    }
+}
+
+/// 找到已配置被动设备对应的 HID 路径与输入报告长度。
+pub fn passive_path(dev: &DeviceSpec, profile: &Profile) -> Option<(String, u16)> {
+    let rule = &profile.match_rule;
+    let vid = dev.vid.to_ascii_uppercase();
+    let pid = dev.pid.to_ascii_uppercase();
+    let wired_pid = dev.wired_pid.to_ascii_uppercase();
+    let want_bluetooth = link_filter(&dev.link);
+    let floor = if rule.usage_page >= 0xFF00 && !rule.ignore_usage_page {
+        0xFF00
+    } else {
+        0
+    };
+    let mut matching: Vec<Interface> = list_interfaces(floor, true, false)
+        .into_iter()
+        .filter(|interface| interface_ok(interface, &vid, rule, want_bluetooth))
+        .filter(|interface| matches_instance(&interface.dev, &dev.instance))
+        .filter(|interface| matches_profile_pid(&interface.dev, profile))
+        .collect();
+    if !rule.require_pid_hit
+        && (!pid.is_empty() || !wired_pid.is_empty())
+        && let Some(exact) = matching.iter().find(|interface| {
+            interface.dev.pid == pid || (!wired_pid.is_empty() && interface.dev.pid == wired_pid)
+        })
+    {
+        return Some((exact.dev.path.clone(), exact.in_len));
+    }
+    matching
+        .drain(..)
+        .next()
+        .map(|interface| (interface.dev.path, interface.in_len))
 }
 
 // ---------------------------------------------------------------------------
@@ -1344,4 +1572,25 @@ fn log_read(dev: &DeviceSpec, profile: &Profile, result: &ReadResult) {
     ));
     use std::io::Write as _;
     let _ = std::io::stdout().flush();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_mi_col;
+
+    #[test]
+    fn parses_interface_and_collection() {
+        assert_eq!(
+            parse_mi_col(r"\\?\hid#vid_0b05&pid_1ace&mi_00&col02#7&1&0&0000#{guid}"),
+            (Some(0), Some(2))
+        );
+        assert_eq!(
+            parse_mi_col(r"\\?\hid#vid_2516&pid_01b7&mi_03&col01#7&1&0&0000#{guid}"),
+            (Some(3), Some(1))
+        );
+        assert_eq!(
+            parse_mi_col(r"\\?\hid#vid_373b&pid_10c9#7&2&0&0000#{guid}"),
+            (None, None)
+        );
+    }
 }
