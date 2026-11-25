@@ -61,6 +61,7 @@
 1. **HID 2.4G 厂商协议**：内置 98 条协议（3.2.x 基线 57 条 + 3.3.0 扩充 41 条），覆盖鼠标、键盘、耳机与手柄接收器。
 2. **蓝牙系统电量**：Windows 能为已配对蓝牙设备提供电量属性时直接读取，无需厂商协议。
 3. **XInput 手柄**：最多 4 个槽位，原生四档电量映射为 5 / 20 / 50 / 100%。
+4. **飞智空间站**：空间站服务运行时，可扫描添加飞智八爪鱼 4（2.4G）。仅查询本机服务，电量为档位换算的近似值。请选「飞智空间站 · 2.4G」设备，不要用通用 Xbox 槽位代替。
 
 ### 3.3.0 扩充
 3.3.0 新增 A 类型号（ATK F1 Ultimate / A9 Ultimate / Zero、VXE MAD R / MAD R Major Plus、VGN F1/F2 变体、MCHOSE G87 V2 / V9 Turbo / X9 / V9 Pro 2 / R9、ROG Delta II 等）与 B 类单帧/被动设备（SteelSeries Arctis、NZXT、WLmouse、Glorious、Zowie EC-CW、Cooler Master、LAMZU、Razer 耳机、G-Wolves、Ninjutso、Flydigi、Keychron、Rongyuan 键盘槽、Astro、Sony INZONE H5、Kysona、AJAZZ AK870、AULA L9/G9、Rapoo MT560/VT、MCHOSE L7、HyperX CF2、ROG Cetra 等）。缺少可靠帧/偏移的族继续 deferred。

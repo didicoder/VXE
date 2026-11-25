@@ -1,0 +1,39 @@
+name: Windows portable VXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['ci/vxe-portable']
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}\build\cargo-target
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pnpm and frontend dependencies
+        run: |
+          npm install --global pnpm@10.34.5
+          pnpm install --frozen-lockfile
+      - name: Select Rust MSVC toolchain
+        run: rustup default stable-x86_64-pc-windows-msvc
+      - name: Build frontend for Rust tests
+        run: npm exec --yes --package=pnpm@10.34.5 -- pnpm build
+      - name: Run backend tests
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
+      - name: Build portable executable without installer
+        run: npm exec --yes --package=pnpm@10.34.5 -- pnpm exec tauri build --no-bundle
+      - name: Upload portable executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: VXE-Windows-x64-portable
+          path: build/cargo-target/release/VXE.exe
+          if-no-files-found: error

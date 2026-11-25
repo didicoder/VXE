@@ -146,7 +146,10 @@ function preferredName(existing: DeviceConfig | null, device: DiscoveredDevice):
 }
 
 /** 旧中性名往往同时存着同 VID/PID 的占位协议；识别出具体型号后一并更新。 */
+const SPACE_STATION_PROFILE = 'flydigi-space-station';
+
 function preferredProfile(existing: DeviceConfig | null, device: DiscoveredDevice): string {
+  if (device.profile === SPACE_STATION_PROFILE) return device.profile;
   const current = existing?.label?.trim() ?? '';
   if (current && neutralLabel(current, device) && device.profile) {
     return device.profile;
@@ -157,6 +160,7 @@ function preferredProfile(existing: DeviceConfig | null, device: DiscoveredDevic
 /** 扫描后顺手迁移旧版的中性名/占位协议，用户不必手动点“更新”。 */
 async function adoptRecognizedLabels(): Promise<void> {
   for (const device of discover.devices) {
+    if (device.profile === SPACE_STATION_PROFILE) continue;
     const existing = existingFor(device);
     if (!existing) continue;
     const current = existing.label?.trim() ?? '';
@@ -183,6 +187,10 @@ const visibleDevices = computed(() =>
 const rows = computed(() => visibleDevices.value.slice(offset.value, offset.value + PER));
 
 const profileOptions = computed<ProfileChoice[]>(() => {
+  const selectedDevice = selected.value;
+  if (selectedDevice?.profile === SPACE_STATION_PROFILE) {
+    return [{ id: SPACE_STATION_PROFILE, label: selectedDevice.profile_label, vendor: '飞智', keywords: '' }];
+  }
   const base = discover.profiles.length > 0 ? discover.profiles : [NO_PROFILE];
   if (profileId.value && !base.some((choice) => choice.id === profileId.value)) {
     return [
@@ -522,6 +530,7 @@ async function runDetect(): Promise<void> {
   if (!device || discover.detecting) return;
   probe.value = null;
   const result = await discover.detect(buildSpec(device), profileId.value);
+  if (selected.value !== device) return;
   probe.value = result ?? { ok: false, text: discover.error ?? '试读失败' };
 }
 

@@ -302,7 +302,8 @@ pub fn scan(dirs: &[PathBuf], known: &[DeviceSpec]) -> Vec<DiscoveredDevice> {
     let mut used = HashSet::new();
     // 扫描只列设备：HID/蓝牙/手柄并行枚举，各自套硬超时；驱动卡住时宁可少列几台，
     // 也不能让添加窗一直停在「正在扫描」。耗时写 exe 同级 scan.log。
-    let (hid_devices, bt_devices, xinput_devices) = std::thread::scope(|scope| {
+    let (hid_devices, bt_devices, xinput_devices, flydigi_status) = std::thread::scope(|scope| {
+        let flydigi = scope.spawn(battery::flydigi::query);
         let hid = scope.spawn(|| {
             timed("hid", Duration::from_secs(5), || {
                 hid::list_hid_detailed(true)
@@ -315,6 +316,7 @@ pub fn scan(dirs: &[PathBuf], known: &[DeviceSpec]) -> Vec<DiscoveredDevice> {
             hid.join().unwrap_or_default(),
             bt.join().unwrap_or_default(),
             xinput.join().unwrap_or_default(),
+            flydigi.join().unwrap_or(battery::flydigi::Status::Unavailable),
         )
     });
     for device in &hid_devices {
@@ -562,6 +564,35 @@ pub fn scan(dirs: &[PathBuf], known: &[DeviceSpec]) -> Vec<DiscoveredDevice> {
         });
     }
 
+    if let battery::flydigi::Status::Online(_) = flydigi_status {
+        use battery::flydigi as source;
+        let existing = known.iter().find(|spec| source::matches(spec));
+        let label = existing
+            .map(|spec| spec.label.as_str())
+            .filter(|label| !label.is_empty())
+            .unwrap_or(source::LABEL);
+        out.push(DiscoveredDevice {
+            id: source::ID.to_string(),
+            label: label.to_string(),
+            vid: source::VID.to_string(),
+            pid: source::PID.to_string(),
+            wired_pid: String::new(),
+            link: "2.4G".to_string(),
+            bt_addr: String::new(),
+            icon: "gamepad".to_string(),
+            color: config::PALETTE[out.len() % config::PALETTE.len()].to_string(),
+            profile: source::PROFILE.to_string(),
+            profile_label: source::PROFILE_LABEL.to_string(),
+            model: String::new(),
+            model_label: String::new(),
+            model_candidates: Vec::new(),
+            instance: String::new(),
+            hit: true,
+            level: None,
+            charging: false,
+        });
+    }
+
     out.sort_by(|a, b| {
         b.hit
             .cmp(&a.hit)
@@ -775,6 +806,22 @@ pub fn probe_unknown(dirs: &[PathBuf], unknown: &UnknownHid) -> Result<ProbeResu
 }
 
 pub fn detect(spec: &DeviceSpec, profile_id: &str, dirs: &[PathBuf]) -> DetectResult {
+    use battery::flydigi as source;
+    if source::matches(spec) {
+        let (ok, text) = match source::query() {
+            source::Status::Unavailable => (false, "飞智空间站不可用，请确认服务已运行".to_string()),
+            source::Status::Offline => (false, "未找到在线的八爪鱼 4（2.4G）".to_string()),
+            status @ source::Status::Online(_) => {
+                let reading = status.reading();
+                match reading.level {
+                    Some(level) => (true, format!("读取成功 · 电量约 {level}%")),
+                    None if reading.charging => (true, "充电中 · 空间站未提供百分比".to_string()),
+                    None => (false, "手柄在线，但空间站未提供电量".to_string()),
+                }
+            }
+        };
+        return DetectResult { ok, text };
+    }
     if battery::is_audio(spec) {
         return match battery::bt::read_level(&spec.bt_addr) {
             Some(level) => DetectResult {

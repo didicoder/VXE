@@ -1,5 +1,6 @@
 pub mod bt;
 pub mod decode;
+pub mod flydigi;
 pub mod hid;
 pub mod legacy_labels;
 pub mod models;
@@ -160,6 +161,11 @@ pub fn read_all(
     } else {
         HashMap::new()
     };
+    let flydigi_status = if devices.iter().any(flydigi::matches) {
+        flydigi::query()
+    } else {
+        flydigi::Status::Unavailable
+    };
     // HID/蓝牙/手柄逐台读取互不依赖，并行后刷新耗时从「累加」降到「最慢一台」。
     let infos: Vec<ReadResult> = std::thread::scope(|scope| {
         let handles: Vec<_> = devices
@@ -167,7 +173,13 @@ pub fn read_all(
             .map(|dev| {
                 let table = &table;
                 let audio = &audio_levels;
-                scope.spawn(move || read_one(dev, table, audio, passive))
+                scope.spawn(move || {
+                    if flydigi::matches(dev) {
+                        flydigi_status.reading()
+                    } else {
+                        read_one(dev, table, audio, passive)
+                    }
+                })
             })
             .collect();
         handles
