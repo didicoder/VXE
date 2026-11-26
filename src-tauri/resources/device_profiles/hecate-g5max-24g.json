@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "hecate-g5max-24g",
+  "label": "漫步者 HECATE G5 Max 无线版 耳机",
+  "vendor": "漫步者 HECATE",
+  "keywords": "HECATE G5 Max 无线版 耳机 漫步者",
+  "notes": "35BB:A00B 2.4G dongle. Official HECATE Connect g5max query: report D0 35 BB 01 00 on mi_03 col03; reply D0 35 BB 0A 00 <connected> <battery>. Charging state is not decoded.",
+  "known_ids": [{ "vid": "35BB", "pid": "A00B" }],
+  "match": {
+    "usage_page": "0xFF02",
+    "usage": "0x0002",
+    "interface": 3,
+    "collection": 3,
+    "require_pid_hit": false
+  },
+  "request": {
+    "transport": "write_read",
+    "payload_hex": "D0 35 BB 01 00",
+    "out_len": 64,
+    "in_len": 64,
+    "read_matching": true
+  },
+  "response": {
+    "min_length": 8,
+    "markers": [[0, 208], [1, 53], [2, 187], [3, 10], [4, 0]],
+    "status": { "offset": 5, "ok_values": [1] },
+    "level": { "offset": 6, "min": 0, "max": 100 }
+  },
+  "sampling": {
+    "attempts": 3,
+    "stable_count": 1,
+    "request_timeout_ms": 1200,
+    "total_timeout_s": 4.5,
+    "pick": "last"
+  }
+}
