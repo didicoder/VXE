@@ -9,6 +9,7 @@ use windows::Win32::Storage::FileSystem::{
     ReadFile, WriteFile,
 };
 use windows::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
+use windows::Win32::System::Pipes::WaitNamedPipeW;
 use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
 use windows::core::{PCWSTR, w};
 
@@ -31,8 +32,9 @@ const REQUEST: &[u8] = b"FDG_PROTOCOL\n\x05\x00\x00\x00\x08\x81\x20\x1a\x00";
 const MAX_PAYLOAD: usize = 1024 * 1024;
 const TIMEOUT: Duration = Duration::from_millis(1500);
 const IO_PENDING: i32 = 0x8007_03e5u32 as i32;
-// SECURITY_SQOS_PRESENT | SECURITY_ANONYMOUS: the server cannot impersonate us.
+// SECURITY_SQOS_PRESENT | SECURITY_ANONYMOUS: prevent server impersonation.
 const ANONYMOUS_SQOS: u32 = 0x0010_0000;
+const PIPE_BUSY: i32 = 0x8007_00e7u32 as i32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
@@ -236,38 +238,45 @@ impl Query<'_> {
         }
     }
 
-    fn read_exact(&mut self, size: usize) -> Result<Vec<u8>, ()> {
-        let mut result = Vec::with_capacity(size);
-        while result.len() < size {
-            let remaining = size - result.len();
-            let (buffer, count) = self.transfer(vec![0; remaining], false)?;
-            if count == 0 || count > remaining {
-                return Err(());
-            }
-            result.extend_from_slice(&buffer[..count]);
-        }
-        Ok(result)
-    }
-
     fn run(&mut self) -> Result<Status, ()> {
         let (_, count) = self.transfer(REQUEST.to_vec(), true)?;
         if count != REQUEST.len() {
             return Err(());
         }
+        // CreateFile opens the client in byte-read mode. A read can split or
+        // coalesce service frames, so keep remaining bytes for the next frame.
+        let mut bytes = Vec::new();
+        let header_len = HEADER.len() + 4;
         for _ in 0..4 {
-            let header = self.read_exact(HEADER.len() + 4)?;
-            if !header.starts_with(HEADER) {
+            while bytes.len() < header_len {
+                self.read_chunk(&mut bytes)?;
+            }
+            if !bytes.starts_with(HEADER) {
                 return Err(());
             }
-            let len = u32::from_le_bytes(header[HEADER.len()..].try_into().map_err(|_| ())?) as usize;
+            let len = u32::from_le_bytes(bytes[HEADER.len()..header_len].try_into().map_err(|_| ())?) as usize;
             if len > MAX_PAYLOAD {
                 return Err(());
             }
-            if let Some(result) = response(&self.read_exact(len)?)? {
+            let end = header_len + len;
+            while bytes.len() < end {
+                self.read_chunk(&mut bytes)?;
+            }
+            if let Some(result) = response(&bytes[header_len..end])? {
                 return Ok(result);
             }
+            bytes.drain(..end);
         }
         Err(())
+    }
+
+    fn read_chunk(&mut self, bytes: &mut Vec<u8>) -> Result<(), ()> {
+        let (buffer, count) = self.transfer(vec![0; 4096], false)?;
+        if count == 0 {
+            return Err(());
+        }
+        bytes.extend_from_slice(buffer.get(..count).ok_or(())?);
+        Ok(())
     }
 }
 
@@ -283,18 +292,35 @@ pub fn query() -> Status {
     }
     // The event signals completion (including cancellation); it is now safe to free the buffer.
     *pending = None;
-    let Ok(pipe) = (unsafe {
-        CreateFileW(
-            w!(r"\\.\pipe\fcs.sock"),
-            GENERIC_READ.0 | GENERIC_WRITE.0,
-            FILE_SHARE_MODE(0),
-            None,
-            OPEN_EXISTING,
-            FILE_FLAGS_AND_ATTRIBUTES(FILE_FLAG_OVERLAPPED.0 | ANONYMOUS_SQOS),
-            None,
-        )
-    }) else {
-        return Status::Unavailable;
+    let path = w!(r"\\.\pipe\fcs.sock");
+    let pipe = loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Status::Unavailable;
+        }
+        let opened = unsafe {
+            CreateFileW(
+                path,
+                GENERIC_READ.0 | GENERIC_WRITE.0,
+                FILE_SHARE_MODE(0),
+                None,
+                OPEN_EXISTING,
+                FILE_FLAGS_AND_ATTRIBUTES(FILE_FLAG_OVERLAPPED.0 | ANONYMOUS_SQOS),
+                None,
+            )
+        };
+        match opened {
+            Ok(pipe) => break pipe,
+            Err(error) if error.code().0 == PIPE_BUSY => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero()
+                    || !unsafe { WaitNamedPipeW(path, remaining.as_millis().max(1) as u32) }.as_bool()
+                {
+                    return Status::Unavailable;
+                }
+            }
+            Err(_) => return Status::Unavailable,
+        }
     };
     let pipe = unsafe { OwnedHandle::from_raw_handle(pipe.0) };
     Query { pipe: Some(pipe), pending: &mut pending, deadline }
