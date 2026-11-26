@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "id": "rainy75-v2-24g",
+  "label": "WOB Rainy75 V2 键盘（2.4G）",
+  "vendor": "WOB",
+  "keywords": "Rainy75 V2 2.4G 键盘",
+  "notes": "Only the locally verified 36B0:3071 receiver. Read-only, 257-byte Windows input report; accepts the verified 06-length battery frame.",
+  "known_ids": [
+    {
+      "vid": "36B0",
+      "pid": "3071"
+    }
+  ],
+  "match": {
+    "usage_page": "0xFF60",
+    "usage": "0x0061",
+    "require_pid_hit": false
+  },
+  "request": {
+    "transport": "passive",
+    "in_len": 257
+  },
+  "passive": {
+    "initial_wait_ms": 7000,
+    "stale_after_s": 25
+  },
+  "response": {
+    "min_length": 257,
+    "exact_length": 257,
+    "markers": [
+      [
+        0,
+        0
+      ],
+      [
+        1,
+        190
+      ],
+      [
+        2,
+        187
+      ],
+      [
+        3,
+        6
+      ],
+      [
+        6,
+        237
+      ]
+    ],
+    "status": {
+      "offset": 5,
+      "ok_values": [
+        0,
+        1,
+        2
+      ]
+    },
+    "level": {
+      "offset": 4,
+      "min": 0,
+      "max": 100
+    },
+    "charging": {
+      "offset": 5,
+      "when_charging": 2
+    }
+  },
+  "sampling": {
+    "attempts": 1,
+    "stable_count": 1,
+    "total_timeout_s": 9,
+    "pick": "last"
+  }
+}

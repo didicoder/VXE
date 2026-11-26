@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "mchose-a7x-ultra-1009",
+  "label": "迈丛 MCHOSE A7X Ultra 鼠标",
+  "vendor": "迈丛 MCHOSE",
+  "keywords": "A7X Ultra 1009 鼠标",
+  "notes": "M HUB battery/device-info query 0x11/0x06. Only the verified wireless receiver 3837:1009 and response device 3837:4011. Does not change mouse settings.",
+  "known_ids": [{ "vid": "3837", "pid": "1009" }],
+  "match": { "usage_page": "0xFF01", "usage": "0x0001", "feature_len": 65, "require_pid_hit": false },
+  "request": {
+    "transport": "feature_write_read",
+    "payload_hex": "11 F9 FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF",
+    "out_len": 65,
+    "in_len": 65,
+    "report_id": 17
+  },
+  "response": {
+    "transform": "invert",
+    "min_length": 65,
+    "exact_length": 65,
+    "markers": [[0, 238], [1, 6], [2, 55], [3, 56], [4, 17], [5, 64]],
+    "level": { "offset": 11, "min": 1, "max": 100 },
+    "charging": { "offset": 12, "when_charging": 1 }
+  },
+  "sampling": { "attempts": 3, "stable_count": 2, "total_timeout_s": 4.5, "pick": "last" }
+}
